@@ -106,18 +106,18 @@
           <span id="onlineCountBadge" class="px-1.5 py-0.5 rounded bg-slate-800 text-[11px] text-amber-300 font-black">1</span>
         </button>
 
-        <button id="btnOpenUpload" class="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#F6B800] hover:bg-[#E0A800] text-[#0B1622] text-xs font-black flex items-center gap-1.5">
+        <button id="btnOpenUpload" data-admin-only="1" class="hidden min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#F6B800] hover:bg-[#E0A800] text-[#0B1622] text-xs font-black flex items-center gap-1.5">
           <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span class="hidden sm:inline">上傳音檔</span>
         </button>
 
-        <button id="btnPublishWeb" class="min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-lg bg-[#0B875B] hover:bg-[#096E4A] text-white text-xs font-bold flex items-center gap-1.5">
+        <button id="btnPublishWeb" data-admin-only="1" class="hidden min-h-[38px] px-2.5 sm:px-3.5 py-1.5 rounded-lg bg-[#0B875B] hover:bg-[#096E4A] text-white text-xs font-bold flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           <span class="hidden md:inline">發佈至報站器</span>
           <span class="md:hidden">發佈</span>
         </button>
 
-        <button id="btnOpenSettings" class="min-h-[38px] min-w-[38px] p-2 rounded-lg bg-[#15263B] hover:bg-[#1E3552] text-slate-200 border border-slate-700 flex items-center justify-center" title="設定、匯入與匯出">
+        <button id="btnOpenSettings" data-admin-only="1" class="hidden min-h-[38px] min-w-[38px] p-2 rounded-lg bg-[#15263B] hover:bg-[#1E3552] text-slate-200 border border-slate-700 flex items-center justify-center" title="設定、匯入與匯出">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1z"/></svg>
         </button>
       </div>
@@ -228,7 +228,7 @@
 
         <div id="welcomeQuickBar" class="hidden flex items-center justify-between gap-2">
           <span class="text-xs font-bold text-slate-600">管理全線預設、路線專屬或班次歡迎詞</span>
-          <button id="btnQuickUploadWelcome" class="min-h-[36px] px-3 py-1.5 rounded-lg bg-[#0B1622] text-[#F6B800] text-xs font-bold shrink-0">＋ 上傳歡迎詞</button>
+          <button id="btnQuickUploadWelcome" data-admin-only="1" class="hidden min-h-[36px] px-3 py-1.5 rounded-lg bg-[#0B1622] text-[#F6B800] text-xs font-bold shrink-0">＋ 上傳歡迎詞</button>
         </div>
 
         <div id="missingControlsBar" class="hidden space-y-2">
@@ -354,7 +354,7 @@
           </div>
         </div>
 
-        <div class="space-y-1">
+        <div id="collabFbConfigBlock" data-admin-only="1" class="hidden space-y-1">
           <label class="block font-black text-slate-800">Firebase Realtime Database URL（多人實時同步伺服器）</label>
           <input id="collabFbUrl" type="text" placeholder="https://你的專案-default-rtdb.firebaseio.com" class="w-full min-h-[42px] px-3 py-2 rounded-xl border border-slate-300 font-mono text-xs" />
           <p class="text-[11px] text-slate-500">填一次之後，點下方「複製邀請連結」傳去 WhatsApp，朋友點開就自動連入同一個房間實時一齊配對。</p>
@@ -369,7 +369,7 @@
         </div>
 
         <div class="space-y-2 pt-1">
-          <label class="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+          <label id="collabTokenShareRow" data-admin-only="1" class="hidden flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
             <input id="chkIncludeTokenInLink" type="checkbox" class="w-4 h-4 accent-[#0052CC]" />
             邀請連結同時附帶 GitHub Token（只建議傳給信任嘅管理員朋友）
           </label>
@@ -852,15 +852,44 @@ function startRealtimeCollab() {
   }, 45000);
 }
 
+function isAdminUser() {
+  return Boolean(getGhToken()) || localStorage.getItem('ctb_studio_is_admin') === '1';
+}
+
+function applyRoleAccessUi() {
+  const admin = isAdminUser();
+  document.querySelectorAll('[data-admin-only="1"]').forEach(el => {
+    if (el.id === 'btnQuickUploadWelcome') {
+      el.classList.toggle('hidden', !admin || activeNav !== 'welcome');
+    } else {
+      el.classList.toggle('hidden', !admin);
+    }
+  });
+}
+
 function parseInviteHashOnBoot() {
   const h = window.location.hash || '';
-  if (!h.startsWith('#collab=')) return;
+  if (h === '#admin' || h === '#admin=1') {
+    localStorage.setItem('ctb_studio_is_admin', '1');
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    return;
+  }
+  if (!h.startsWith('#collab=')) {
+    if (getGhToken()) localStorage.setItem('ctb_studio_is_admin', '1');
+    return;
+  }
   try {
     const raw = decodeURIComponent(h.slice('#collab='.length));
     const obj = JSON.parse(decodeURIComponent(escape(atob(raw))));
     if (obj.fb) localStorage.setItem(KEY_CFG_FB, obj.fb);
     if (obj.room) localStorage.setItem(KEY_CFG_ROOM, obj.room);
-    if (obj.gh) localStorage.setItem(KEY_CFG_GH, obj.gh);
+    if (obj.gh) {
+      localStorage.setItem(KEY_CFG_GH, obj.gh);
+      localStorage.setItem('ctb_studio_is_admin', '1');
+    } else {
+      localStorage.removeItem(KEY_CFG_GH);
+      localStorage.removeItem('ctb_studio_is_admin');
+    }
     history.replaceState(null, '', window.location.pathname + window.location.search);
     if (!localStorage.getItem(KEY_CFG_NAME)) {
       setTimeout(() => {
@@ -1131,6 +1160,7 @@ function renderMainList() {
 
   document.getElementById('audioScopePills').classList.toggle('hidden', activeNav !== 'unmatched' && activeNav !== 'processed');
   document.getElementById('welcomeQuickBar').classList.toggle('hidden', activeNav !== 'welcome');
+  document.getElementById('btnQuickUploadWelcome')?.classList.toggle('hidden', !isAdminUser());
   document.getElementById('missingControlsBar').classList.toggle('hidden', activeNav !== 'missing');
   document.getElementById('tripCreateBar').classList.toggle('hidden', activeNav !== 'trips');
   document.getElementById('missingTripSelect').classList.toggle('hidden', missingMode !== 'by_trip');
@@ -2590,6 +2620,8 @@ function initEvents() {
     localStorage.setItem(KEY_CFG_AUDIO, document.getElementById('cfgAudioBase').value.trim() || DEFAULT_AUDIO_BASE);
     localStorage.setItem(KEY_CFG_WEBDATA, document.getElementById('cfgWebDataBase').value.trim() || DEFAULT_WEB_DATA_BASE);
     localStorage.setItem(KEY_CFG_GH, document.getElementById('cfgGhToken').value.trim());
+    if (getGhToken()) localStorage.setItem('ctb_studio_is_admin', '1');
+    applyRoleAccessUi();
     sModal.classList.add('hidden');
     loadRemoteData();
     showToast('設定已儲存');
@@ -2613,6 +2645,7 @@ function boot() {
     }
   } catch (_) {}
   initEvents();
+  applyRoleAccessUi();
   syncNavAndPillsUi();
   startRealtimeCollab();
   loadRemoteData();
