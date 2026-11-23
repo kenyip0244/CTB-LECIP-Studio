@@ -1,0 +1,1783 @@
+﻿<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230D1B2A'/%3E%3Crect x='8' y='8' width='48' height='14' rx='4' fill='%23F5B400'/%3E%3Cpath d='M16 36h32M16 48h20' stroke='%23F8FAFC' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <title>城巴報站音檔處理站</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg-canvas: #F4F6F8;
+      --bg-surface: #FFFFFF;
+      --bg-rail: #0D1B2A;
+      --bg-rail-hover: #172A40;
+      --ink-main: #0F172A;
+      --ink-muted: #475569;
+      --border-line: #DCE2E9;
+      --ctb-amber: #F5B400;
+      --ctb-blue: #0052CC;
+      --state-ok: #0D8A55;
+      --state-miss: #C8322B;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Inter", "Noto Sans TC", "PingFang HK", "Microsoft JhengHei", sans-serif;
+      background-color: var(--bg-canvas);
+      color: var(--ink-main);
+      font-variant-numeric: tabular-nums;
+      margin: 0;
+    }
+    ::selection { background-color: #FDE68A; color: #0F172A; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid var(--ctb-blue);
+      outline-offset: 2px;
+    }
+    .nav-btn[aria-current="page"] {
+      background-color: var(--bg-rail-hover);
+      color: #FFFFFF;
+      box-shadow: inset 3px 0 0 var(--ctb-amber);
+    }
+    .list-row { transition: background-color 120ms ease; }
+    .list-row:hover { background-color: #F8FAFC; }
+    .list-row[data-selected="true"] {
+      background-color: #EFF6FF;
+      box-shadow: inset 3px 0 0 var(--ctb-blue);
+    }
+    .route-spine {
+      position: relative;
+    }
+    .route-spine::before {
+      content: "";
+      position: absolute;
+      left: 19px;
+      top: 18px;
+      bottom: 18px;
+      width: 2px;
+      background-color: #CBD5E1;
+    }
+  </style>
+</head>
+<body class="h-screen overflow-hidden flex flex-col">
+
+  <!-- Top Command Header -->
+  <header class="h-14 bg-[#0D1B2A] text-white border-b border-slate-800 px-4 flex items-center justify-between gap-3 shrink-0 z-30">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-8 h-8 rounded-md bg-[#F5B400] text-[#0D1B2A] flex items-center justify-center font-black text-sm shrink-0">
+        站
+      </div>
+      <div class="min-w-0">
+        <h1 class="text-sm sm:text-base font-black tracking-tight leading-tight truncate">城巴報站音檔處理站</h1>
+      </div>
+      <span id="syncStatusPill" class="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/90 text-[11px] font-semibold text-slate-300 border border-slate-700">
+        <span id="syncDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        <span id="syncLabel">本機模式</span>
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2 shrink-0">
+      <button id="btnReloadData" title="重新載入遠端音檔清單與車站表" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+        <span class="hidden sm:inline">重新載入</span>
+      </button>
+      <label class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 cursor-pointer hidden sm:inline-flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        匯入 JSON
+        <input id="importJsonInput" type="file" accept=".json" class="hidden" />
+      </label>
+      <button id="btnExportJson" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold">
+        匯出對照表
+      </button>
+      <button id="btnPublishWeb" class="px-3 py-1.5 rounded-lg bg-[#0D8A55] hover:bg-[#0A7045] text-white text-xs font-bold flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        發佈至報站器
+      </button>
+      <button id="btnOpenSettings" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700" title="來源與同步設定">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09c-.66 0-1.25.4-1.51 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Workspace Shell -->
+  <div class="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+
+    <!-- Left Navigation Rail -->
+    <nav class="bg-[#0D1B2A] text-slate-300 lg:w-56 shrink-0 flex lg:flex-col border-b lg:border-b-0 lg:border-r border-slate-800 overflow-x-auto lg:overflow-y-auto">
+      <div class="flex lg:flex-col p-2 gap-1 w-full">
+        <button data-nav="unmatched" aria-current="page" class="nav-btn flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-xs font-bold hover:bg-[#172A40] whitespace-nowrap">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            未配對音檔
+          </span>
+          <span id="navCntUnmatched" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 text-[11px]">0</span>
+        </button>
+
+        <button data-nav="processed" class="nav-btn flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-xs font-bold hover:bg-[#172A40] whitespace-nowrap">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            已處理音檔
+          </span>
+          <span id="navCntProcessed" class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 text-[11px]">0</span>
+        </button>
+
+        <button data-nav="missing" class="nav-btn flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-xs font-bold hover:bg-[#172A40] whitespace-nowrap">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            缺失車站
+          </span>
+          <span id="navCntMissing" class="px-1.5 py-0.5 rounded bg-red-950 text-red-300 text-[11px]">0</span>
+        </button>
+
+        <button data-nav="trips" class="nav-btn flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-xs font-bold hover:bg-[#172A40] whitespace-nowrap">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>
+            路線班次名稱
+          </span>
+          <span id="navCntTrips" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-200 text-[11px]">0</span>
+        </button>
+      </div>
+
+      <div class="hidden lg:block mt-auto p-3 border-t border-slate-800 space-y-2 text-[11px] text-slate-400">
+        <div class="flex items-center justify-between">
+          <span>音檔總數</span>
+          <strong id="railTotalAudio" class="text-slate-200">0</strong>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>車站總覆蓋</span>
+          <strong id="railStopCov" class="text-emerald-400">0 / 0</strong>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>已忽略音檔</span>
+          <button id="btnRestoreIgnored" class="text-amber-400 hover:underline font-bold">0（復原）</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Center Worklist Area -->
+    <section class="flex-1 min-w-0 min-h-0 flex flex-col bg-white border-r border-[#DCE2E9]">
+
+      <!-- Dynamic Filter Toolbar -->
+      <div id="worklistToolbar" class="px-4 py-3 border-b border-[#DCE2E9] bg-[#F8FAFC] flex flex-wrap items-center gap-2 shrink-0">
+        <div class="relative flex-1 min-w-[200px]">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="mainSearchInput" type="text" placeholder="搜尋檔名、站名、站號、路線或班次名稱..." class="w-full pl-9 pr-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold outline-none focus:border-[#0052CC]" />
+        </div>
+
+        <select id="audioScopeFilter" class="px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700">
+          <option value="stops">只看車站報站檔</option>
+          <option value="announcements">只看特別廣播</option>
+          <option value="all">全部音檔</option>
+        </select>
+
+        <select id="missingViewMode" class="hidden px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700">
+          <option value="by_trip">按路線班次連線圖</option>
+          <option value="all_stops">全部缺失車站清單</option>
+        </select>
+
+        <select id="missingTripSelect" class="hidden max-w-[260px] px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800"></select>
+      </div>
+
+      <!-- Optional Trip Creation Bar (visible on trips tab) -->
+      <div id="tripCreateBar" class="hidden px-4 py-2.5 border-b border-[#DCE2E9] bg-amber-50/70 flex flex-wrap items-center gap-2 shrink-0">
+        <span class="text-xs font-black text-slate-800">新增自訂路線班次：</span>
+        <input id="newTripRouteInput" type="text" placeholder="路線（如 796X）" class="w-28 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold" />
+        <input id="newTripNameInput" type="text" placeholder="班次名稱（如 796X-將軍澳工業邨-特別班）" class="flex-1 min-w-[200px] px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold" />
+        <button id="btnAddCustomTrip" class="px-3 py-1.5 rounded-lg bg-[#0D1B2A] hover:bg-slate-800 text-white text-xs font-bold">加入班次</button>
+      </div>
+
+      <!-- Main Scrollable List / Route Diagram -->
+      <div id="mainListContainer" class="flex-1 overflow-y-auto divide-y divide-slate-200">
+        <div class="py-16 text-center text-xs font-bold text-slate-400">正在載入音檔庫與車站資料...</div>
+      </div>
+
+      <!-- Pagination Footer -->
+      <div id="paginationFooter" class="px-4 py-2.5 border-t border-[#DCE2E9] bg-[#F8FAFC] flex items-center justify-between text-xs font-bold shrink-0">
+        <button id="btnPrevPage" class="px-3 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40">上一頁</button>
+        <span id="pageStatusText" class="text-slate-600">第 1 / 1 頁</span>
+        <button id="btnNextPage" class="px-3 py-1 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40">下一頁</button>
+      </div>
+    </section>
+
+    <!-- Right Inspector Panel (Audio Rule Editor / Missing Stop Binder) -->
+    <aside id="inspectorPanel" class="hidden lg:flex lg:w-[420px] xl:w-[460px] shrink-0 bg-[#F8FAFC] flex-col min-h-0 overflow-hidden">
+      <div id="inspectorHeader" class="px-4 py-3 bg-white border-b border-[#DCE2E9] flex items-center justify-between gap-2 shrink-0">
+        <div class="min-w-0">
+          <h2 id="inspectorTitle" class="text-sm font-black text-slate-900 truncate">點選左側項目開始處理</h2>
+          <p id="inspectorSubtitle" class="text-[11px] text-slate-500 truncate mt-0.5">選擇音檔設定播放站點與路線條件，或選擇缺失車站指派音檔</p>
+        </div>
+        <button id="btnCloseInspectorMobile" class="lg:hidden px-2.5 py-1 rounded-lg bg-slate-100 text-xs font-bold text-slate-700">返回清單</button>
+      </div>
+
+      <div id="inspectorBody" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <div class="py-16 text-center space-y-2 text-slate-400">
+          <svg class="w-10 h-10 mx-auto text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          <p class="text-xs font-bold">從左側點選任何音檔或缺失車站</p>
+          <p class="text-[11px]">支援一檔多站、限定適用路線與指定路線班次名稱</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Settings Dialog (Source URLs, GitHub Publish Token, Firebase RTDB) -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
+    <div class="w-full max-w-lg rounded-xl bg-white border border-slate-200 shadow-2xl overflow-hidden">
+      <div class="px-5 py-3.5 bg-[#0D1B2A] text-white flex items-center justify-between">
+        <h3 class="text-sm font-black">資料來源與跨裝置同步設定</h3>
+        <button id="btnCloseSettings" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-bold">關閉</button>
+      </div>
+      <div class="p-5 space-y-4 text-xs">
+        <div class="space-y-1">
+          <label class="block font-bold text-slate-700">音檔庫基底網址（CTB-LECIP-Audio）</label>
+          <input id="cfgAudioBase" type="text" class="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono text-[11px]" />
+        </div>
+        <div class="space-y-1">
+          <label class="block font-bold text-slate-700">報站器資料基底網址（CTB-LECIP-Web/data）</label>
+          <input id="cfgWebDataBase" type="text" class="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono text-[11px]" />
+        </div>
+        <div class="space-y-1 pt-2 border-t border-slate-200">
+          <label class="block font-bold text-slate-700">GitHub Personal Access Token（一鍵寫回 CTB-LECIP-Web/data/audio_mapping.json）</label>
+          <input id="cfgGhToken" type="password" placeholder="ghp_...（留空則改用本機下載匯出）" class="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono text-[11px]" />
+        </div>
+        <div class="space-y-1">
+          <label class="block font-bold text-slate-700">Firebase Realtime Database URL（跨裝置實時同步，選填）</label>
+          <input id="cfgFbUrl" type="text" placeholder="https://你的專案-default-rtdb.firebaseio.com" class="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono text-[11px]" />
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button id="btnResetDefaults" class="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700">重設預設網址</button>
+          <button id="btnSaveSettings" class="px-4 py-2 rounded-lg bg-[#0052CC] hover:bg-[#0041A3] text-white font-bold">儲存並套用</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Feedback -->
+  <div id="toastBox" class="hidden fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-lg bg-[#0D1B2A] text-white text-xs font-bold shadow-xl border border-slate-700 max-w-sm"></div>
+
+<script>
+const DEFAULT_AUDIO_BASE = 'https://kenyip0244.github.io/CTB-LECIP-Audio';
+const DEFAULT_WEB_DATA_BASE = 'https://kenyip0244.github.io/CTB-LECIP-Web/data';
+const GH_OWNER = 'kenyip0244';
+const GH_WEB_REPO = 'CTB-LECIP-Web';
+
+const KEY_STUDIO_DB = 'ctb_audio_studio_db_v1';
+const KEY_CFG_AUDIO = 'ctb_studio_audio_base';
+const KEY_CFG_WEBDATA = 'ctb_studio_webdata_base';
+const KEY_CFG_GH = 'ctb_studio_gh_token';
+const KEY_CFG_FB = 'ctb_studio_fb_url';
+
+const PAGE_SIZE = 35;
+
+let audioManifest = [];
+let allStops = [];
+let stopById = new Map();
+let stopsByNormName = new Map();
+let allRouteIds = [];
+let tripCatalog = new Map(); // tripKey -> { tripKey, routeId, bound, serviceType, defaultName, destTc, stops: [{seq, stopId}] }
+
+let studioDb = {
+  rules: {},       // audioPath -> { stopIds: [], routeMode: 'all'|'specific', routes: [], tripMode: 'all'|'specific', tripNames: [], note: '', updatedAt }
+  ignored: {},     // audioPath -> true
+  customTrips: {}  // tripKey -> { name, routeId, bound, serviceType, isManual }
+};
+
+let activeNav = 'unmatched'; // unmatched | processed | missing | trips
+let currentPage = 0;
+let selectedAudioPath = '';
+let selectedMissingStopId = '';
+let selectedMissingTripKey = '';
+
+let playerAudio = null;
+let playerPath = '';
+let playerRate = 1;
+let fbPollTimer = null;
+let lastFbTs = 0;
+
+function esc(v) {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toastBox');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(window._studioToastTimer);
+  window._studioToastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+}
+
+function getAudioBase() {
+  return (localStorage.getItem(KEY_CFG_AUDIO) || DEFAULT_AUDIO_BASE).trim().replace(/\/+$/, '');
+}
+function getWebDataBase() {
+  return (localStorage.getItem(KEY_CFG_WEBDATA) || DEFAULT_WEB_DATA_BASE).trim().replace(/\/+$/, '');
+}
+function getGhToken() {
+  return (localStorage.getItem(KEY_CFG_GH) || '').trim();
+}
+function getFbUrl() {
+  return (localStorage.getItem(KEY_CFG_FB) || '').trim().replace(/\/+$/, '');
+}
+
+function cleanJoint(raw) {
+  const s = String(raw || '').trim();
+  if (!s || !s.includes('/')) return s;
+  const parts = s.split(/\s*\/\s*/).map(p => p.trim()).filter(Boolean);
+  if (parts.length !== 2) return s;
+  const [p1, p2] = parts;
+  if (/^(G|UG|LG|M|B\d?|\d+)$/i.test(p1) && /^F$/i.test(p2)) return s;
+  if (/\/\s+/.test(s) || (p1 === p1.toUpperCase() && p2 !== p2.toUpperCase())) return p2;
+  return s;
+}
+
+function normText(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[\(（][^\)）]*[\)）]/g, '')
+    .replace(/[\s,，\.。\-－·・、'"`]/g, '');
+}
+
+function buildAudioUrl(relPath) {
+  const clean = String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  return `${getAudioBase()}/${clean.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function ensureRule(audioPath) {
+  if (!studioDb.rules[audioPath]) {
+    studioDb.rules[audioPath] = {
+      stopIds: [],
+      routeMode: 'all',
+      routes: [],
+      tripMode: 'all',
+      tripNames: [],
+      note: '',
+      updatedAt: ''
+    };
+  }
+  const r = studioDb.rules[audioPath];
+  if (!Array.isArray(r.stopIds)) r.stopIds = [];
+  if (!Array.isArray(r.routes)) r.routes = [];
+  if (!Array.isArray(r.tripNames)) r.tripNames = [];
+  if (!r.routeMode) r.routeMode = 'all';
+  if (!r.tripMode) r.tripMode = 'all';
+  return r;
+}
+
+function isAudioProcessed(path) {
+  const r = studioDb.rules[path];
+  return Boolean(r && Array.isArray(r.stopIds) && r.stopIds.length > 0 && !studioDb.ignored[path]);
+}
+
+function saveDb(pushCloud = true) {
+  try {
+    localStorage.setItem(KEY_STUDIO_DB, JSON.stringify(studioDb));
+  } catch (e) {
+    showToast('本機儲存空間不足：' + e.message);
+  }
+  if (pushCloud) pushToFirebase();
+}
+
+async function pushToFirebase() {
+  const fb = getFbUrl();
+  if (!fb) return;
+  try {
+    const ts = Date.now();
+    await fetch(`${fb}/ctb_audio_studio_v1.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updatedAt: ts, studioDb })
+    });
+    lastFbTs = ts;
+    updateSyncIndicator('雲端已同步', true);
+  } catch (_) {
+    updateSyncIndicator('雲端連線失敗', false);
+  }
+}
+
+async function pullFromFirebase(notify = false) {
+  const fb = getFbUrl();
+  if (!fb) {
+    updateSyncIndicator('本機模式', true);
+    return;
+  }
+  try {
+    const res = await fetch(`${fb}/ctb_audio_studio_v1.json?t=${Date.now()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return;
+    const rTs = Number(data.updatedAt || 0);
+    if (rTs > lastFbTs && data.studioDb) {
+      lastFbTs = rTs;
+      studioDb = {
+        rules: data.studioDb.rules || {},
+        ignored: data.studioDb.ignored || {},
+        customTrips: data.studioDb.customTrips || {}
+      };
+      saveDb(false);
+      renderAll();
+      if (notify) showToast('已同步其他裝置嘅最新變更');
+    }
+    updateSyncIndicator('跨裝置實時同步中', true);
+  } catch (_) {
+    updateSyncIndicator('雲端連線中斷', false);
+  }
+}
+
+function updateSyncIndicator(label, ok) {
+  const lbl = document.getElementById('syncLabel');
+  const dot = document.getElementById('syncDot');
+  if (lbl) lbl.textContent = label;
+  if (dot) dot.className = `w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-400' : 'bg-amber-400'}`;
+}
+
+function startFbSyncLoop() {
+  if (fbPollTimer) clearInterval(fbPollTimer);
+  pullFromFirebase(false);
+  if (getFbUrl()) {
+    fbPollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') pullFromFirebase(true);
+    }, 5000);
+  }
+}
+
+function getTripDisplayName(tripKey) {
+  const custom = studioDb.customTrips[tripKey];
+  if (custom && custom.name) return custom.name;
+  const base = tripCatalog.get(tripKey);
+  return base ? base.defaultName : tripKey;
+}
+
+function getAllTripEntries() {
+  const map = new Map();
+  for (const [k, v] of tripCatalog.entries()) {
+    map.set(k, {
+      tripKey: k,
+      routeId: v.routeId,
+      bound: v.bound,
+      serviceType: v.serviceType,
+      name: getTripDisplayName(k),
+      defaultName: v.defaultName,
+      stops: v.stops,
+      isManual: false
+    });
+  }
+  for (const [k, c] of Object.entries(studioDb.customTrips || {})) {
+    if (!map.has(k)) {
+      map.set(k, {
+        tripKey: k,
+        routeId: c.routeId || '',
+        bound: c.bound || 'O',
+        serviceType: c.serviceType || '1',
+        name: c.name || k,
+        defaultName: c.name || k,
+        stops: [],
+        isManual: true
+      });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    const rCmp = a.routeId.localeCompare(b.routeId, undefined, { numeric: true });
+    if (rCmp !== 0) return rCmp;
+    return a.name.localeCompare(b.name, 'zh-HK');
+  });
+}
+
+function buildStopCoverageIndex() {
+  const map = new Map(); // stopId -> [{ audioPath, rule }]
+  for (const [audioPath, rule] of Object.entries(studioDb.rules)) {
+    if (studioDb.ignored[audioPath]) continue;
+    if (!rule || !Array.isArray(rule.stopIds) || rule.stopIds.length === 0) continue;
+    for (const sid of rule.stopIds) {
+      if (!map.has(sid)) map.set(sid, []);
+      map.get(sid).push({ audioPath, rule });
+    }
+  }
+  return map;
+}
+
+function getMatchingRulesForStopOnTrip(stopId, routeId, tripName, coverageMap) {
+  const list = coverageMap.get(stopId) || [];
+  return list.filter(({ rule }) => {
+    const routeOk = rule.routeMode !== 'specific' || (Array.isArray(rule.routes) && rule.routes.includes(routeId));
+    const tripOk = rule.tripMode !== 'specific' || (Array.isArray(rule.tripNames) && rule.tripNames.includes(tripName));
+    return routeOk && tripOk;
+  });
+}
+
+function filterAudioCategory(path) {
+  const mode = document.getElementById('audioScopeFilter')?.value || 'stops';
+  const lower = path.toLowerCase();
+  const isAnn = lower.includes('/announcements/') || lower.startsWith('audio/announcements/');
+  const fn = path.split('/').pop();
+  const isSys = fn.startsWith('+') || fn.toLowerCase() === 'terminus.mp3' || fn.toLowerCase().startsWith('welcome');
+  if (mode === 'stops') return !isAnn && !isSys && /^\d+_/.test(fn);
+  if (mode === 'announcements') return isAnn || isSys;
+  return true;
+}
+
+function togglePlayAudio(relPath) {
+  if (playerAudio && playerPath === relPath) {
+    if (playerAudio.paused) {
+      playerAudio.play().catch(() => {});
+    } else {
+      playerAudio.pause();
+    }
+    syncPlayerUi();
+    return;
+  }
+  if (playerAudio) {
+    try { playerAudio.pause(); } catch (_) {}
+  }
+  playerPath = relPath;
+  playerAudio = new Audio(buildAudioUrl(relPath));
+  playerAudio.playbackRate = playerRate;
+  playerAudio.onended = () => syncPlayerUi();
+  playerAudio.ontimeupdate = () => syncPlayerProgress();
+  playerAudio.onloadedmetadata = () => syncPlayerProgress();
+  playerAudio.onerror = () => {
+    showToast('音檔播放失敗：' + relPath.split('/').pop());
+    syncPlayerUi();
+  };
+  playerAudio.play().catch(e => showToast('播放失敗：' + e.message));
+  syncPlayerUi();
+}
+
+function syncPlayerUi() {
+  document.querySelectorAll('[data-play-btn]').forEach(btn => {
+    const p = btn.dataset.playBtn;
+    const isPlaying = playerAudio && !playerAudio.paused && playerPath === p;
+    btn.textContent = isPlaying ? '暫停' : '試聽';
+    btn.className = isPlaying
+      ? 'px-2.5 py-1 rounded-md bg-[#C8322B] text-white text-[11px] font-bold shrink-0'
+      : 'px-2.5 py-1 rounded-md bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-[11px] font-bold shrink-0';
+  });
+  const inspBtn = document.getElementById('inspPlayToggle');
+  if (inspBtn && selectedAudioPath) {
+    const active = playerAudio && !playerAudio.paused && playerPath === selectedAudioPath;
+    inspBtn.textContent = active ? '暫停播放' : '試聽音檔';
+  }
+}
+
+function syncPlayerProgress() {
+  const bar = document.getElementById('inspAudioRange');
+  const timeLbl = document.getElementById('inspAudioTime');
+  if (!bar || !timeLbl || !playerAudio || playerPath !== selectedAudioPath) return;
+  const dur = Number.isFinite(playerAudio.duration) ? playerAudio.duration : 0;
+  const cur = playerAudio.currentTime || 0;
+  bar.max = dur || 1;
+  bar.value = cur;
+  const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  timeLbl.textContent = `${fmt(cur)} / ${fmt(dur)}`;
+}
+
+function updateNavCounters() {
+  const coverageMap = buildStopCoverageIndex();
+  let unmatchedCnt = 0;
+  let processedCnt = 0;
+  let ignoredCnt = 0;
+
+  for (const p of audioManifest) {
+    if (studioDb.ignored[p]) { ignoredCnt++; continue; }
+    if (!filterAudioCategory(p)) continue;
+    if (isAudioProcessed(p)) processedCnt++;
+    else unmatchedCnt++;
+  }
+
+  let coveredStops = 0;
+  for (const st of allStops) {
+    if ((coverageMap.get(st.stopId) || []).length > 0) coveredStops++;
+  }
+  const missingStops = Math.max(0, allStops.length - coveredStops);
+
+  document.getElementById('navCntUnmatched').textContent = String(unmatchedCnt);
+  document.getElementById('navCntProcessed').textContent = String(processedCnt);
+  document.getElementById('navCntMissing').textContent = String(missingStops);
+  document.getElementById('navCntTrips').textContent = String(getAllTripEntries().length);
+  document.getElementById('railTotalAudio').textContent = String(audioManifest.length);
+  document.getElementById('railStopCov').textContent = `${coveredStops} / ${allStops.length}`;
+  document.getElementById('btnRestoreIgnored').textContent = `${ignoredCnt}（復原）`;
+}
+
+function populateMissingTripDropdown() {
+  const sel = document.getElementById('missingTripSelect');
+  if (!sel) return;
+  const trips = getAllTripEntries().filter(t => t.stops.length > 0);
+  const coverageMap = buildStopCoverageIndex();
+  if (!selectedMissingTripKey && trips.length > 0) {
+    selectedMissingTripKey = trips[0].tripKey;
+  }
+  sel.innerHTML = trips.map(t => {
+    let miss = 0;
+    for (const s of t.stops) {
+      if (getMatchingRulesForStopOnTrip(s.stopId, t.routeId, t.name, coverageMap).length === 0) miss++;
+    }
+    return `<option value="${esc(t.tripKey)}" ${t.tripKey === selectedMissingTripKey ? 'selected' : ''}>${esc(t.name)}（缺 ${miss}/${t.stops.length} 站）</option>`;
+  }).join('');
+}
+
+function renderMainList() {
+  updateNavCounters();
+  const kw = (document.getElementById('mainSearchInput')?.value || '').trim().toLowerCase();
+  const scopeSel = document.getElementById('audioScopeFilter');
+  const missModeSel = document.getElementById('missingViewMode');
+  const missTripSel = document.getElementById('missingTripSelect');
+  const tripCreateBar = document.getElementById('tripCreateBar');
+  const pageFooter = document.getElementById('paginationFooter');
+  const container = document.getElementById('mainListContainer');
+
+  scopeSel.classList.toggle('hidden', activeNav !== 'unmatched' && activeNav !== 'processed');
+  missModeSel.classList.toggle('hidden', activeNav !== 'missing');
+  const isByTrip = activeNav === 'missing' && missModeSel.value === 'by_trip';
+  missTripSel.classList.toggle('hidden', !isByTrip);
+  tripCreateBar.classList.toggle('hidden', activeNav !== 'trips');
+
+  if (activeNav === 'unmatched' || activeNav === 'processed') {
+    pageFooter.classList.remove('hidden');
+    const items = audioManifest.filter(path => {
+      if (studioDb.ignored[path]) return false;
+      if (!filterAudioCategory(path)) return false;
+      const proc = isAudioProcessed(path);
+      if (activeNav === 'unmatched' && proc) return false;
+      if (activeNav === 'processed' && !proc) return false;
+      if (kw) {
+        const r = studioDb.rules[path];
+        const stopNames = (r?.stopIds || []).map(sid => {
+          const st = stopById.get(sid);
+          return st ? `${st.stopId} ${st.nameTc} ${st.nameEn}` : sid;
+        }).join(' ');
+        const hay = `${path} ${stopNames} ${(r?.routes || []).join(' ')} ${(r?.tripNames || []).join(' ')} ${r?.note || ''}`.toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    });
+
+    const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+    if (currentPage >= totalPages) currentPage = totalPages - 1;
+    if (currentPage < 0) currentPage = 0;
+    const slice = items.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+    document.getElementById('pageStatusText').textContent = `第 ${currentPage + 1} / ${totalPages} 頁（共 ${items.length} 個音檔）`;
+    document.getElementById('btnPrevPage').disabled = currentPage <= 0;
+    document.getElementById('btnNextPage').disabled = currentPage >= totalPages - 1;
+
+    if (!slice.length) {
+      container.innerHTML = `<div class="py-16 text-center text-xs font-bold text-slate-400">目前沒有符合條件嘅音檔</div>`;
+      return;
+    }
+
+    container.innerHTML = slice.map(path => {
+      const fn = path.split('/').pop();
+      const folder = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      const r = studioDb.rules[path];
+      const stopBadges = (r?.stopIds || []).slice(0, 3).map(sid => {
+        const st = stopById.get(sid);
+        return `<span class="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">${esc(st ? st.nameTc : sid)}</span>`;
+      }).join('');
+      const moreStops = (r?.stopIds?.length || 0) > 3 ? `<span class="text-[11px] font-bold text-slate-500">+${r.stopIds.length - 3} 站</span>` : '';
+      const routeTag = r && r.routeMode === 'specific' && r.routes.length
+        ? `<span class="px-1.5 py-0.5 rounded bg-blue-50 text-[#0052CC] text-[11px] font-bold">路線：${esc(r.routes.slice(0, 4).join(', '))}${r.routes.length > 4 ? '…' : ''}</span>`
+        : (activeNav === 'processed' ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-semibold">所有途經路線</span>` : '');
+      const tripTag = r && r.tripMode === 'specific' && r.tripNames.length
+        ? `<span class="px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">班次：${esc(r.tripNames[0])}${r.tripNames.length > 1 ? ` +${r.tripNames.length - 1}` : ''}</span>`
+        : '';
+
+      return `
+        <div data-select-audio="${esc(path)}" data-selected="${selectedAudioPath === path}" class="list-row px-4 py-3 cursor-pointer flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1 space-y-1">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-xs font-black text-slate-900 truncate">${esc(fn)}</span>
+              ${folder ? `<span class="text-[10px] text-slate-400 truncate hidden sm:inline">${esc(folder)}</span>` : ''}
+            </div>
+            ${activeNav === 'processed' ? `
+              <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                ${stopBadges}${moreStops}${routeTag}${tripTag}
+              </div>
+            ` : ''}
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button data-play-btn="${esc(path)}" class="px-2.5 py-1 rounded-md bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-[11px] font-bold">試聽</button>
+            <button data-ignore-audio="${esc(path)}" title="忽略／移除此音檔" class="px-2 py-1 rounded-md bg-white border border-red-200 hover:bg-red-50 text-[#C8322B] text-[11px] font-bold">刪除</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('[data-select-audio]').forEach(row => {
+      row.onclick = (e) => {
+        if (e.target.closest('button')) return;
+        selectAudioForInspector(row.dataset.selectAudio);
+      };
+    });
+    container.querySelectorAll('[data-play-btn]').forEach(b => {
+      b.onclick = (e) => { e.stopPropagation(); togglePlayAudio(b.dataset.playBtn); };
+    });
+    container.querySelectorAll('[data-ignore-audio]').forEach(b => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const p = b.dataset.ignoreAudio;
+        if (isAudioProcessed(p)) {
+          delete studioDb.rules[p];
+          showToast('已清除配對並退回未配對清單');
+        } else {
+          studioDb.ignored[p] = true;
+          showToast('已移至忽略清單（可喺左下角復原）');
+        }
+        if (selectedAudioPath === p) selectedAudioPath = '';
+        saveDb();
+        renderAll();
+      };
+    });
+    syncPlayerUi();
+    return;
+  }
+
+  if (activeNav === 'missing') {
+    const coverageMap = buildStopCoverageIndex();
+    if (missModeSel.value === 'by_trip') {
+      pageFooter.classList.add('hidden');
+      populateMissingTripDropdown();
+      const trip = getAllTripEntries().find(t => t.tripKey === selectedMissingTripKey);
+      if (!trip || !trip.stops.length) {
+        container.innerHTML = `<div class="py-16 text-center text-xs font-bold text-slate-400">找不到路線站序資料（請確認 stops.json 已載入）</div>`;
+        return;
+      }
+
+      let coveredCount = 0;
+      const rows = trip.stops.map((s, idx) => {
+        const st = stopById.get(s.stopId);
+        const hits = getMatchingRulesForStopOnTrip(s.stopId, trip.routeId, trip.name, coverageMap);
+        const isCovered = hits.length > 0;
+        if (isCovered) coveredCount++;
+        return { seq: s.seq || (idx + 1), stopId: s.stopId, st, hits, isCovered };
+      }).filter(item => {
+        if (!kw) return true;
+        const hay = `${item.stopId} ${item.st?.nameTc || ''} ${item.st?.nameEn || ''} ${item.st?.subTc || ''}`.toLowerCase();
+        return hay.includes(kw);
+      });
+
+      const pct = Math.round((coveredCount / trip.stops.length) * 100);
+      container.innerHTML = `
+        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div class="text-xs font-black text-slate-900">${esc(trip.name)}</div>
+            <div class="text-[11px] text-slate-500 mt-0.5">共 ${trip.stops.length} 站・已有音檔 ${coveredCount} 站・<span class="text-[#C8322B] font-bold">缺失 ${trip.stops.length - coveredCount} 站</span></div>
+          </div>
+          <div class="w-40">
+            <div class="h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div class="h-full bg-[#0D8A55]" style="width:${pct}%"></div>
+            </div>
+            <div class="text-[10px] text-right font-bold text-slate-500 mt-0.5">覆蓋率 ${pct}%</div>
+          </div>
+        </div>
+        <div class="route-spine py-2">
+          ${rows.map(item => `
+            <div data-pick-missing="${esc(item.stopId)}" data-selected="${selectedMissingStopId === item.stopId}" class="list-row relative pl-11 pr-4 py-2.5 cursor-pointer flex items-center justify-between gap-3">
+              <span class="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 ${item.isCovered ? 'bg-[#0D8A55] border-[#0D8A55]' : 'bg-white border-[#C8322B]'}"></span>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-black text-slate-400 w-6">${item.seq}.</span>
+                  <span class="text-xs font-black text-slate-900 truncate">${esc(item.st?.nameTc || item.stopId)}</span>
+                  <span class="text-[11px] font-semibold text-slate-400">#${esc(item.st?.numId || item.stopId)}</span>
+                </div>
+                <div class="pl-8 mt-0.5 flex flex-wrap items-center gap-1.5">
+                  ${item.isCovered
+                    ? item.hits.map(h => `<span class="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">${esc(h.audioPath.split('/').pop())}</span>`).join('')
+                    : `<span class="text-[11px] font-bold text-[#C8322B]">缺失報站音檔</span>`}
+                </div>
+              </div>
+              <button data-bind-missing="${esc(item.stopId)}" class="px-2.5 py-1 rounded-md text-[11px] font-bold shrink-0 ${item.isCovered ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100' : 'bg-[#0052CC] text-white hover:bg-[#0041A3]'}">
+                ${item.isCovered ? '增補音檔' : '指派音檔'}
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      container.querySelectorAll('[data-pick-missing]').forEach(row => {
+        row.onclick = () => selectMissingStopForInspector(row.dataset.pickMissing, trip);
+      });
+      return;
+    }
+
+    // All missing stops list
+    pageFooter.classList.remove('hidden');
+    const missingList = allStops.filter(st => {
+      if ((coverageMap.get(st.stopId) || []).length > 0) return false;
+      if (kw) {
+        const hay = `${st.stopId} ${st.numId} ${st.nameTc} ${st.subTc} ${st.nameEn} ${st.routes.join(' ')}`.toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    });
+
+    const totalPages = Math.max(1, Math.ceil(missingList.length / PAGE_SIZE));
+    if (currentPage >= totalPages) currentPage = totalPages - 1;
+    if (currentPage < 0) currentPage = 0;
+    const slice = missingList.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+    document.getElementById('pageStatusText').textContent = `第 ${currentPage + 1} / ${totalPages} 頁（共 ${missingList.length} 個缺失車站）`;
+    document.getElementById('btnPrevPage').disabled = currentPage <= 0;
+    document.getElementById('btnNextPage').disabled = currentPage >= totalPages - 1;
+
+    container.innerHTML = slice.length ? slice.map(st => `
+      <div data-pick-missing="${esc(st.stopId)}" data-selected="${selectedMissingStopId === st.stopId}" class="list-row px-4 py-3 cursor-pointer flex items-center justify-between gap-3">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-[#C8322B] shrink-0"></span>
+            <span class="text-xs font-black text-slate-900 truncate">${esc(st.nameTc)}</span>
+            ${st.subTc ? `<span class="text-[11px] font-semibold text-slate-500 truncate">${esc(st.subTc)}</span>` : ''}
+            <span class="text-[11px] text-slate-400">#${esc(st.numId)}</span>
+          </div>
+          <div class="text-[11px] text-slate-500 truncate mt-0.5">途經路線：${esc(st.routes.slice(0, 10).join(' / ') || '無')}</div>
+        </div>
+        <button data-bind-missing="${esc(st.stopId)}" class="px-2.5 py-1 rounded-md bg-[#0052CC] hover:bg-[#0041A3] text-white text-[11px] font-bold shrink-0">指派音檔</button>
+      </div>
+    `).join('') : `<div class="py-16 text-center text-xs font-bold text-emerald-700">所有篩選條件下嘅車站都已有音檔覆蓋！</div>`;
+
+    container.querySelectorAll('[data-pick-missing]').forEach(row => {
+      row.onclick = () => selectMissingStopForInspector(row.dataset.pickMissing, null);
+    });
+    return;
+  }
+
+  if (activeNav === 'trips') {
+    pageFooter.classList.remove('hidden');
+    const coverageMap = buildStopCoverageIndex();
+    const trips = getAllTripEntries().filter(t => {
+      if (!kw) return true;
+      return `${t.routeId} ${t.name} ${t.defaultName} ${t.tripKey}`.toLowerCase().includes(kw);
+    });
+
+    const totalPages = Math.max(1, Math.ceil(trips.length / PAGE_SIZE));
+    if (currentPage >= totalPages) currentPage = totalPages - 1;
+    if (currentPage < 0) currentPage = 0;
+    const slice = trips.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+    document.getElementById('pageStatusText').textContent = `第 ${currentPage + 1} / ${totalPages} 頁（共 ${trips.length} 個路線班次）`;
+    document.getElementById('btnPrevPage').disabled = currentPage <= 0;
+    document.getElementById('btnNextPage').disabled = currentPage >= totalPages - 1;
+
+    container.innerHTML = slice.map(t => {
+      let cov = 0;
+      for (const s of t.stops) {
+        if (getMatchingRulesForStopOnTrip(s.stopId, t.routeId, t.name, coverageMap).length > 0) cov++;
+      }
+      const total = t.stops.length;
+      const miss = Math.max(0, total - cov);
+      return `
+        <div class="px-4 py-3 flex flex-wrap items-center justify-between gap-3 hover:bg-slate-50">
+          <div class="flex items-center gap-2.5 min-w-0 flex-1">
+            <span class="px-2 py-1 rounded bg-[#0D1B2A] text-[#F5B400] text-xs font-black shrink-0">${esc(t.routeId || '自訂')}</span>
+            <input data-edit-trip-key="${esc(t.tripKey)}" value="${esc(t.name)}" class="trip-name-input flex-1 min-w-[180px] px-2.5 py-1 rounded-md bg-white border border-slate-300 text-xs font-bold text-slate-900 focus:border-[#0052CC]" />
+          </div>
+          <div class="flex items-center gap-2 shrink-0 text-[11px] font-bold">
+            ${total > 0
+              ? `<span class="${miss === 0 ? 'text-[#0D8A55]' : 'text-slate-600'}">已覆蓋 ${cov}/${total}${miss > 0 ? `（缺 ${miss}）` : ''}</span>`
+              : `<span class="text-amber-700">自訂班次名稱</span>`}
+            ${total > 0 ? `<button data-jump-trip="${esc(t.tripKey)}" class="px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-[#0052CC]">檢視缺失站</button>` : ''}
+            ${t.isManual ? `<button data-del-trip="${esc(t.tripKey)}" class="px-2 py-1 rounded-md bg-red-50 hover:bg-red-100 text-[#C8322B]">移除</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('') || `<div class="py-16 text-center text-xs font-bold text-slate-400">找不到符合的路線班次</div>`;
+
+    container.querySelectorAll('.trip-name-input').forEach(inp => {
+      inp.onchange = () => {
+        const key = inp.dataset.editTripKey;
+        const oldName = getTripDisplayName(key);
+        const newName = inp.value.trim();
+        if (!newName) { inp.value = oldName; return; }
+        const base = tripCatalog.get(key);
+        studioDb.customTrips[key] = {
+          name: newName,
+          routeId: base?.routeId || studioDb.customTrips[key]?.routeId || '',
+          bound: base?.bound || studioDb.customTrips[key]?.bound || 'O',
+          serviceType: base?.serviceType || studioDb.customTrips[key]?.serviceType || '1',
+          isManual: !base
+        };
+        // Propagate renamed trip name into existing rules
+        for (const r of Object.values(studioDb.rules)) {
+          if (Array.isArray(r.tripNames) && r.tripNames.includes(oldName)) {
+            r.tripNames = r.tripNames.map(x => x === oldName ? newName : x);
+          }
+        }
+        saveDb();
+        showToast(`已更新班次名稱：${newName}`);
+      };
+    });
+
+    container.querySelectorAll('[data-jump-trip]').forEach(btn => {
+      btn.onclick = () => {
+        selectedMissingTripKey = btn.dataset.jumpTrip;
+        activeNav = 'missing';
+        document.getElementById('missingViewMode').value = 'by_trip';
+        updateNavButtons();
+        renderMainList();
+      };
+    });
+
+    container.querySelectorAll('[data-del-trip]').forEach(btn => {
+      btn.onclick = () => {
+        delete studioDb.customTrips[btn.dataset.delTrip];
+        saveDb();
+        renderMainList();
+      };
+    });
+  }
+}
+
+function showInspectorMobile() {
+  const panel = document.getElementById('inspectorPanel');
+  if (window.innerWidth < 1024 && panel) {
+    panel.classList.remove('hidden');
+    panel.classList.add('fixed', 'inset-0', 'z-40', 'flex');
+  }
+}
+
+function hideInspectorMobile() {
+  const panel = document.getElementById('inspectorPanel');
+  if (window.innerWidth < 1024 && panel) {
+    panel.classList.add('hidden');
+    panel.classList.remove('fixed', 'inset-0', 'z-40');
+  }
+}
+
+function selectAudioForInspector(audioPath) {
+  selectedAudioPath = audioPath;
+  selectedMissingStopId = '';
+  renderMainList();
+  renderAudioInspector();
+  showInspectorMobile();
+}
+
+function renderAudioInspector() {
+  const titleEl = document.getElementById('inspectorTitle');
+  const subEl = document.getElementById('inspectorSubtitle');
+  const body = document.getElementById('inspectorBody');
+  if (!selectedAudioPath || !body) return;
+
+  const fn = selectedAudioPath.split('/').pop();
+  const rule = ensureRule(selectedAudioPath);
+  const boundStops = rule.stopIds.map(sid => stopById.get(sid) || { stopId: sid, numId: sid, nameTc: sid, nameEn: '', routes: [] });
+
+  // Suggested routes from bound stops
+  const suggestedRoutesSet = new Set();
+  boundStops.forEach(st => (st.routes || []).forEach(r => suggestedRoutesSet.add(r)));
+  const suggestedRoutes = Array.from(suggestedRoutesSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  // Suggested trips from bound stops / selected routes
+  const relevantRoutes = rule.routeMode === 'specific' && rule.routes.length ? new Set(rule.routes) : suggestedRoutesSet;
+  const allTrips = getAllTripEntries();
+  const suggestedTrips = relevantRoutes.size
+    ? allTrips.filter(t => relevantRoutes.has(t.routeId))
+    : allTrips.slice(0, 30);
+
+  titleEl.textContent = fn;
+  subEl.textContent = selectedAudioPath;
+
+  body.innerHTML = `
+    <!-- Built-in Audio Player -->
+    <div class="bg-white rounded-xl border border-[#DCE2E9] p-3.5 space-y-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <button id="inspPlayToggle" class="px-3.5 py-1.5 rounded-lg bg-[#0D1B2A] hover:bg-slate-800 text-white text-xs font-bold">
+          ${playerAudio && !playerAudio.paused && playerPath === selectedAudioPath ? '暫停播放' : '試聽音檔'}
+        </button>
+        <div class="flex items-center gap-1.5 text-[11px] font-bold">
+          <span id="inspAudioTime" class="text-slate-500">0:00 / 0:00</span>
+          <select id="inspRateSel" class="px-1.5 py-1 rounded border border-slate-300 bg-slate-50 text-[11px]">
+            <option value="0.85" ${playerRate === 0.85 ? 'selected' : ''}>0.85x</option>
+            <option value="1" ${playerRate === 1 ? 'selected' : ''}>1.0x</option>
+            <option value="1.25" ${playerRate === 1.25 ? 'selected' : ''}>1.25x</option>
+          </select>
+        </div>
+      </div>
+      <input id="inspAudioRange" type="range" min="0" max="1" step="0.05" value="0" class="w-full accent-[#0052CC]" />
+    </div>
+
+    <!-- Step 1: Bound Stops (Single or Multiple) -->
+    <div class="bg-white rounded-xl border border-[#DCE2E9] p-3.5 space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-xs font-black text-slate-900">播放車站（可選一個或多個）</h3>
+        <span class="text-[11px] font-bold text-[#0052CC]">已選 ${rule.stopIds.length} 站</span>
+      </div>
+
+      <div id="boundStopsChips" class="flex flex-wrap gap-1.5">
+        ${boundStops.length ? boundStops.map(st => `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold">
+            <span>${esc(st.nameTc)} <span class="text-[10px] text-emerald-700">#${esc(st.numId)}</span></span>
+            <button data-remove-stop="${esc(st.stopId)}" class="text-emerald-700 hover:text-red-600 font-black">×</button>
+          </span>
+        `).join('') : `<span class="text-[11px] text-slate-400 font-semibold">尚未綁定任何車站，請在下方搜尋加入</span>`}
+      </div>
+
+      ${boundStops.length === 1 && boundStops[0].normTc ? `
+        <button id="btnAddSameNameStops" class="w-full py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#0052CC] text-[11px] font-bold border border-blue-200">
+          一鍵加入所有同名車站「${esc(boundStops[0].nameTc)}」（來回共用）
+        </button>
+      ` : ''}
+
+      <div class="space-y-1.5">
+        <input id="inspStopSearch" type="text" placeholder="搜尋中文站名、副站名、英文名、站號或路線加入..." class="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-xs font-semibold outline-none focus:border-[#0052CC] focus:bg-white" />
+        <div id="inspStopResults" class="max-h-44 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg hidden"></div>
+      </div>
+    </div>
+
+    <!-- Step 2: Applicable Routes -->
+    <div class="bg-white rounded-xl border border-[#DCE2E9] p-3.5 space-y-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="text-xs font-black text-slate-900">適用路線</h3>
+        <div class="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-[11px] font-bold">
+          <button data-rmode="all" class="px-2.5 py-1 rounded-md ${rule.routeMode === 'all' ? 'bg-[#0D1B2A] text-white' : 'text-slate-600'}">所有途經路線</button>
+          <button data-rmode="specific" class="px-2.5 py-1 rounded-md ${rule.routeMode === 'specific' ? 'bg-[#0052CC] text-white' : 'text-slate-600'}">只限指定路線</button>
+        </div>
+      </div>
+
+      ${rule.routeMode === 'specific' ? `
+        <div class="space-y-2">
+          <div class="flex flex-wrap gap-1.5">
+            ${rule.routes.map(r => `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-600 text-white text-[11px] font-bold">
+                ${esc(r)}
+                <button data-del-route="${esc(r)}" class="hover:text-amber-300">×</button>
+              </span>
+            `).join('') || `<span class="text-[11px] text-slate-400">點選下方途經路線或手動輸入路線編號</span>`}
+          </div>
+          ${suggestedRoutes.length ? `
+            <div class="flex flex-wrap gap-1 pt-1">
+              ${suggestedRoutes.slice(0, 24).map(r => {
+                const on = rule.routes.includes(r);
+                return `<button data-toggle-route="${esc(r)}" class="px-2 py-0.5 rounded text-[11px] font-bold border ${on ? 'bg-blue-50 border-blue-400 text-[#0052CC]' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}">${esc(r)}</button>`;
+              }).join('')}
+            </div>
+          ` : ''}
+          <div class="flex gap-1.5">
+            <input id="manualRouteInput" type="text" placeholder="手動輸入路線（如 796X、A21）" class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-xs font-bold uppercase" />
+            <button id="btnAddManualRoute" class="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold">加入</button>
+          </div>
+        </div>
+      ` : `<p class="text-[11px] text-slate-500">所有途經上述已選車站嘅路線都會播放此音檔。</p>`}
+    </div>
+
+    <!-- Step 3: Route Trip Names -->
+    <div class="bg-white rounded-xl border border-[#DCE2E9] p-3.5 space-y-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="text-xs font-black text-slate-900">適用路線班次名稱</h3>
+        <div class="inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 text-[11px] font-bold">
+          <button data-tmode="all" class="px-2.5 py-1 rounded-md ${rule.tripMode === 'all' ? 'bg-[#0D1B2A] text-white' : 'text-slate-600'}">所有班次</button>
+          <button data-tmode="specific" class="px-2.5 py-1 rounded-md ${rule.tripMode === 'specific' ? 'bg-[#0052CC] text-white' : 'text-slate-600'}">指定班次名稱</button>
+        </div>
+      </div>
+
+      ${rule.tripMode === 'specific' ? `
+        <div class="space-y-2">
+          <div class="flex flex-wrap gap-1.5">
+            ${rule.tripNames.map(tn => `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-950 text-[11px] font-bold">
+                ${esc(tn)}
+                <button data-del-tripname="${esc(tn)}" class="hover:text-red-700">×</button>
+              </span>
+            `).join('') || `<span class="text-[11px] text-slate-400">點選下方班次名稱或手動輸入</span>`}
+          </div>
+          ${suggestedTrips.length ? `
+            <div class="max-h-28 overflow-y-auto flex flex-wrap gap-1 p-1.5 rounded-lg bg-slate-50 border border-slate-200">
+              ${suggestedTrips.slice(0, 40).map(t => {
+                const on = rule.tripNames.includes(t.name);
+                return `<button data-toggle-tripname="${esc(t.name)}" class="px-2 py-0.5 rounded text-[11px] font-bold border ${on ? 'bg-amber-200 border-amber-500 text-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'}">${esc(t.name)}</button>`;
+              }).join('')}
+            </div>
+          ` : ''}
+          <div class="flex gap-1.5">
+            <input id="manualTripInput" type="text" placeholder="手動輸入班次名稱（如 182-愉翠苑-1）" class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-xs font-bold" />
+            <button id="btnAddManualTrip" class="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold">加入</button>
+          </div>
+        </div>
+      ` : `<p class="text-[11px] text-slate-500">套用於適用路線下所有正常及特別班次。</p>`}
+    </div>
+
+    <!-- Note & Actions -->
+    <div class="bg-white rounded-xl border border-[#DCE2E9] p-3.5 space-y-3">
+      <div class="space-y-1">
+        <label class="block text-xs font-black text-slate-900">備註（選填）</label>
+        <input id="inspNoteInput" type="text" value="${esc(rule.note || '')}" placeholder="例如：轉乘特別廣播版 / 舊版女聲" class="w-full px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-xs font-semibold" />
+      </div>
+      <div class="flex items-center justify-between gap-2 pt-1">
+        <button id="btnClearRule" class="px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-[#C8322B] text-xs font-bold">清除此音檔配對</button>
+        <button id="btnSaveRuleDone" class="px-4 py-2 rounded-lg bg-[#0D8A55] hover:bg-[#0A7045] text-white text-xs font-bold">儲存並完成</button>
+      </div>
+    </div>
+  `;
+
+  // Bind Player
+  document.getElementById('inspPlayToggle').onclick = () => togglePlayAudio(selectedAudioPath);
+  document.getElementById('inspRateSel').onchange = (e) => {
+    playerRate = Number(e.target.value) || 1;
+    if (playerAudio) playerAudio.playbackRate = playerRate;
+  };
+  document.getElementById('inspAudioRange').oninput = (e) => {
+    if (playerAudio && playerPath === selectedAudioPath) {
+      playerAudio.currentTime = Number(e.target.value) || 0;
+    }
+  };
+  syncPlayerProgress();
+
+  // Bind Stop removals
+  body.querySelectorAll('[data-remove-stop]').forEach(btn => {
+    btn.onclick = () => {
+      const sid = btn.dataset.removeStop;
+      rule.stopIds = rule.stopIds.filter(x => x !== sid);
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  });
+
+  // Bind Same-Name Batch Add
+  const btnSame = document.getElementById('btnAddSameNameStops');
+  if (btnSame) {
+    btnSame.onclick = () => {
+      const peers = stopsByNormName.get(boundStops[0].normTc) || [];
+      const set = new Set(rule.stopIds);
+      peers.forEach(p => set.add(p.stopId));
+      rule.stopIds = Array.from(set);
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      showToast(`已一併綁定 ${rule.stopIds.length} 個同名車站`);
+      renderMainList();
+      renderAudioInspector();
+    };
+  }
+
+  // Bind Stop search dropdown
+  const stopInp = document.getElementById('inspStopSearch');
+  const stopRes = document.getElementById('inspStopResults');
+  stopInp.oninput = () => {
+    const q = stopInp.value.trim().toLowerCase();
+    if (!q) { stopRes.classList.add('hidden'); return; }
+    const hits = allStops.filter(st =>
+      st.nameTc.toLowerCase().includes(q) ||
+      st.subTc.toLowerCase().includes(q) ||
+      st.nameEn.toLowerCase().includes(q) ||
+      st.numId.includes(q) ||
+      st.routes.some(r => r.toLowerCase().includes(q))
+    ).slice(0, 30);
+
+    stopRes.classList.remove('hidden');
+    stopRes.innerHTML = hits.length ? hits.map(st => {
+      const already = rule.stopIds.includes(st.stopId);
+      return `
+        <button data-add-stop="${esc(st.stopId)}" class="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center justify-between gap-2 text-xs">
+          <div class="min-w-0">
+            <div class="font-bold text-slate-900 truncate">${esc(st.nameTc)} ${st.subTc ? `<span class="text-slate-500">[${esc(st.subTc)}]</span>` : ''} <span class="text-[#0052CC]">#${esc(st.numId)}</span></div>
+            <div class="text-[11px] text-slate-500 truncate">${esc(st.routes.slice(0, 8).join(' / '))}</div>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[11px] font-bold shrink-0 ${already ? 'bg-emerald-100 text-emerald-800' : 'bg-[#0052CC] text-white'}">${already ? '已加入' : '加入'}</span>
+        </button>
+      `;
+    }).join('') : `<div class="p-3 text-center text-[11px] text-slate-400">找不到符合的車站</div>`;
+
+    stopRes.querySelectorAll('[data-add-stop]').forEach(btn => {
+      btn.onclick = () => {
+        const sid = btn.dataset.addStop;
+        if (!rule.stopIds.includes(sid)) {
+          rule.stopIds.push(sid);
+          rule.updatedAt = new Date().toISOString();
+          saveDb();
+          renderMainList();
+          renderAudioInspector();
+        }
+      };
+    });
+  };
+
+  // Bind Route Mode & Toggles
+  body.querySelectorAll('[data-rmode]').forEach(b => {
+    b.onclick = () => {
+      rule.routeMode = b.dataset.rmode;
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  });
+  body.querySelectorAll('[data-toggle-route]').forEach(b => {
+    b.onclick = () => {
+      const r = b.dataset.toggleRoute;
+      rule.routes = rule.routes.includes(r) ? rule.routes.filter(x => x !== r) : [...rule.routes, r];
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  });
+  body.querySelectorAll('[data-del-route]').forEach(b => {
+    b.onclick = () => {
+      rule.routes = rule.routes.filter(x => x !== b.dataset.delRoute);
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  });
+  const btnManualR = document.getElementById('btnAddManualRoute');
+  if (btnManualR) {
+    btnManualR.onclick = () => {
+      const val = (document.getElementById('manualRouteInput').value || '').trim().toUpperCase();
+      if (!val) return;
+      if (!rule.routes.includes(val)) rule.routes.push(val);
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  }
+
+  // Bind Trip Mode & Toggles
+  body.querySelectorAll('[data-tmode]').forEach(b => {
+    b.onclick = () => {
+      rule.tripMode = b.dataset.tmode;
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  });
+  body.querySelectorAll('[data-toggle-tripname]').forEach(b => {
+    b.onclick = () => {
+      const tn = b.dataset.toggleTripname;
+      rule.tripNames = rule.tripNames.includes(tn) ? rule.tripNames.filter(x => x !== tn) : [...rule.tripNames, tn];
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  });
+  body.querySelectorAll('[data-del-tripname]').forEach(b => {
+    b.onclick = () => {
+      rule.tripNames = rule.tripNames.filter(x => x !== b.dataset.delTripname);
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  });
+  const btnManualT = document.getElementById('btnAddManualTrip');
+  if (btnManualT) {
+    btnManualT.onclick = () => {
+      const val = (document.getElementById('manualTripInput').value || '').trim();
+      if (!val) return;
+      if (!rule.tripNames.includes(val)) rule.tripNames.push(val);
+      rule.updatedAt = new Date().toISOString();
+      saveDb();
+      renderMainList();
+      renderAudioInspector();
+    };
+  }
+
+  // Note & Buttons
+  document.getElementById('inspNoteInput').onchange = (e) => {
+    rule.note = e.target.value.trim();
+    rule.updatedAt = new Date().toISOString();
+    saveDb();
+  };
+  document.getElementById('btnClearRule').onclick = () => {
+    delete studioDb.rules[selectedAudioPath];
+    saveDb();
+    showToast('已清除配對並退回未配對');
+    renderMainList();
+    renderAudioInspector();
+  };
+  document.getElementById('btnSaveRuleDone').onclick = () => {
+    rule.note = (document.getElementById('inspNoteInput').value || '').trim();
+    rule.updatedAt = new Date().toISOString();
+    saveDb();
+    showToast(rule.stopIds.length ? '已儲存並歸類至「已處理音檔」' : '已儲存（尚未選車站）');
+    renderMainList();
+    hideInspectorMobile();
+  };
+}
+
+function selectMissingStopForInspector(stopId, contextTrip) {
+  selectedMissingStopId = stopId;
+  selectedAudioPath = '';
+  renderMainList();
+  renderMissingStopInspector(stopId, contextTrip);
+  showInspectorMobile();
+}
+
+function renderMissingStopInspector(stopId, contextTrip) {
+  const st = stopById.get(stopId);
+  const titleEl = document.getElementById('inspectorTitle');
+  const subEl = document.getElementById('inspectorSubtitle');
+  const body = document.getElementById('inspectorBody');
+  if (!st || !body) return;
+
+  titleEl.textContent = `為車站指派音檔：${st.nameTc}`;
+  subEl.textContent = `#${st.numId} ${st.nameEn}${contextTrip ? ` · 來自班次 ${contextTrip.name}` : ''}`;
+
+  const renderAudioCandidates = (kw, onlyUnmatched) => {
+    const q = String(kw || '').trim().toLowerCase();
+    const list = audioManifest.filter(p => {
+      if (studioDb.ignored[p]) return false;
+      if (onlyUnmatched && isAudioProcessed(p)) return false;
+      if (q && !p.toLowerCase().includes(q)) return false;
+      return true;
+    }).slice(0, 45);
+
+    const box = document.getElementById('missingAudioCandidates');
+    if (!box) return;
+    box.innerHTML = list.length ? list.map(p => `
+      <div class="p-2.5 flex items-center justify-between gap-2 hover:bg-slate-50">
+        <div class="min-w-0 flex-1">
+          <div class="text-xs font-bold text-slate-900 truncate">${esc(p.split('/').pop())}</div>
+          <div class="text-[10px] text-slate-400 truncate">${esc(p)}</div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button data-play-btn="${esc(p)}" class="px-2 py-1 rounded bg-white border border-slate-300 text-[11px] font-bold">試聽</button>
+          <button data-assign-audio="${esc(p)}" class="px-2.5 py-1 rounded bg-[#0D8A55] hover:bg-[#0A7045] text-white text-[11px] font-bold">綁定</button>
+        </div>
+      </div>
+    `).join('') : `<div class="py-8 text-center text-xs text-slate-400">找不到符合的已上傳音檔</div>`;
+
+    box.querySelectorAll('[data-play-btn]').forEach(b => b.onclick = () => togglePlayAudio(b.dataset.playBtn));
+    box.querySelectorAll('[data-assign-audio]').forEach(b => {
+      b.onclick = () => {
+        const p = b.dataset.assignAudio;
+        const r = ensureRule(p);
+        if (!r.stopIds.includes(stopId)) r.stopIds.push(stopId);
+        const limitTrip = document.getElementById('chkLimitContextTrip')?.checked;
+        if (limitTrip && contextTrip) {
+          r.routeMode = 'specific';
+          if (!r.routes.includes(contextTrip.routeId)) r.routes.push(contextTrip.routeId);
+          r.tripMode = 'specific';
+          if (!r.tripNames.includes(contextTrip.name)) r.tripNames.push(contextTrip.name);
+        }
+        r.updatedAt = new Date().toISOString();
+        saveDb();
+        showToast(`已將 ${p.split('/').pop()} 綁定至 ${st.nameTc}`);
+        renderMainList();
+        renderMissingStopInspector(stopId, contextTrip);
+      };
+    });
+    syncPlayerUi();
+  };
+
+  body.innerHTML = `
+    <div class="bg-white rounded-xl border border-[#DCE2E9] p-3.5 space-y-2">
+      <div class="text-xs font-black text-slate-900">${esc(st.nameTc)} ${st.subTc ? `<span class="text-slate-500 font-bold">[${esc(st.subTc)}]</span>` : ''}</div>
+      <div class="text-[11px] text-slate-500">途經路線：${esc(st.routes.join(' / ') || '無')}</div>
+      ${contextTrip ? `
+        <label class="flex items-center gap-2 pt-1 text-xs font-bold text-slate-700 cursor-pointer">
+          <input id="chkLimitContextTrip" type="checkbox" class="rounded accent-[#0052CC]" />
+          只套用於目前班次「${esc(contextTrip.name)}」
+        </label>
+      ` : ''}
+    </div>
+
+    <div class="bg-white rounded-xl border border-[#DCE2E9] p-3.5 space-y-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="text-xs font-black text-slate-900">挑選已上傳音檔</h3>
+        <label class="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer">
+          <input id="chkOnlyUnmatched" type="checkbox" checked class="accent-[#0052CC]" />
+          只看未配對音檔
+        </label>
+      </div>
+      <input id="missingAudioSearch" type="text" value="${esc(st.nameTc)}" placeholder="搜尋音檔檔名（例如站號或中文名）..." class="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-300 text-xs font-semibold outline-none focus:border-[#0052CC] focus:bg-white" />
+      <div id="missingAudioCandidates" class="max-h-[380px] overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-lg"></div>
+    </div>
+  `;
+
+  const searchInp = document.getElementById('missingAudioSearch');
+  const onlyChk = document.getElementById('chkOnlyUnmatched');
+  const refresh = () => renderAudioCandidates(searchInp.value, onlyChk.checked);
+  searchInp.oninput = refresh;
+  onlyChk.onchange = refresh;
+  refresh();
+}
+
+function buildExportPayload() {
+  const confirmed = {};
+  const details = {};
+  const rules = [];
+
+  for (const [audioPath, rule] of Object.entries(studioDb.rules)) {
+    if (studioDb.ignored[audioPath]) continue;
+    if (!rule || !Array.isArray(rule.stopIds) || rule.stopIds.length === 0) continue;
+
+    for (const rawId of rule.stopIds) {
+      const sid = String(rawId).trim();
+      const numId = sid.replace(/^0+/, '');
+      if (!confirmed[sid]) confirmed[sid] = audioPath;
+      if (numId && !confirmed[numId]) confirmed[numId] = audioPath;
+    }
+
+    const firstSt = stopById.get(rule.stopIds[0]);
+    details[audioPath] = {
+      stopId: rule.stopIds[0],
+      stopIds: rule.stopIds,
+      routeMode: rule.routeMode || 'all',
+      routes: rule.routes || [],
+      tripMode: rule.tripMode || 'all',
+      tripNames: rule.tripNames || [],
+      scope: rule.stopIds.length > 1 ? 'multi' : 'single',
+      heardTc: firstSt?.nameTc || '',
+      heardEn: firstSt?.nameEn || '',
+      note: rule.note || ''
+    };
+
+    rules.push({
+      audioPath,
+      stopIds: rule.stopIds,
+      routeMode: rule.routeMode || 'all',
+      routes: rule.routes || [],
+      tripMode: rule.tripMode || 'all',
+      tripNames: rule.tripNames || [],
+      note: rule.note || '',
+      updatedAt: rule.updatedAt || new Date().toISOString()
+    });
+  }
+
+  return {
+    version: 4,
+    updatedAt: new Date().toISOString(),
+    confirmed,
+    details,
+    rules,
+    tripNames: studioDb.customTrips || {}
+  };
+}
+
+function downloadJson(obj, filename) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+async function publishToWebRepo() {
+  const payload = buildExportPayload();
+  if (payload.rules.length === 0) {
+    showToast('目前沒有已處理音檔可發佈');
+    return;
+  }
+  const token = getGhToken();
+  if (!token) {
+    downloadJson(payload, 'audio_mapping.json');
+    showToast(`未設定 GitHub Token，已匯出 ${payload.rules.length} 條規則為 audio_mapping.json`);
+    return;
+  }
+  try {
+    showToast(`正在發佈 ${payload.rules.length} 條規則至 CTB-LECIP-Web...`);
+    const apiUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_WEB_REPO}/contents/data/audio_mapping.json`;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    };
+    const chk = await fetch(apiUrl, { headers });
+    const sha = chk.ok ? (await chk.json()).sha : undefined;
+    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
+    const put = await fetch(apiUrl, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        message: `Update audio_mapping.json from Studio (${payload.rules.length} rules)`,
+        content: b64,
+        sha
+      })
+    });
+    if (!put.ok) {
+      const err = await put.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${put.status}`);
+    }
+    showToast(`發佈成功！已同步 ${payload.rules.length} 條音檔規則至報站器`);
+  } catch (e) {
+    showToast('發佈失敗：' + e.message);
+  }
+}
+
+async function safeFetchJson(url) {
+  try {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 14000);
+    const r = await fetch(url, { signal: c.signal });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (_) {
+    return null;
+  }
+}
+
+function mergeMappingIntoDb(mapData) {
+  if (!mapData || typeof mapData !== 'object') return;
+  if (mapData.tripNames && typeof mapData.tripNames === 'object') {
+    studioDb.customTrips = { ...mapData.tripNames, ...studioDb.customTrips };
+  }
+  if (Array.isArray(mapData.rules)) {
+    for (const r of mapData.rules) {
+      if (r.audioPath && !studioDb.rules[r.audioPath]) {
+        studioDb.rules[r.audioPath] = {
+          stopIds: Array.isArray(r.stopIds) ? r.stopIds : [],
+          routeMode: r.routeMode || 'all',
+          routes: Array.isArray(r.routes) ? r.routes : [],
+          tripMode: r.tripMode || 'all',
+          tripNames: Array.isArray(r.tripNames) ? r.tripNames : [],
+          note: r.note || '',
+          updatedAt: r.updatedAt || ''
+        };
+      }
+    }
+  } else if (mapData.details && typeof mapData.details === 'object') {
+    for (const [path, info] of Object.entries(mapData.details)) {
+      if (!studioDb.rules[path] && (info.stopId || (Array.isArray(info.stopIds) && info.stopIds.length))) {
+        const ids = Array.isArray(info.stopIds) && info.stopIds.length
+          ? info.stopIds
+          : (Array.isArray(info.sharedStopIds) && info.sharedStopIds.length ? info.sharedStopIds : [info.stopId]);
+        studioDb.rules[path] = {
+          stopIds: ids.filter(Boolean).map(String),
+          routeMode: info.routeMode || 'all',
+          routes: Array.isArray(info.routes) ? info.routes : [],
+          tripMode: info.tripMode || 'all',
+          tripNames: Array.isArray(info.tripNames) ? info.tripNames : [],
+          note: info.note || '',
+          updatedAt: ''
+        };
+      }
+    }
+  }
+}
+
+async function loadRemoteData() {
+  const container = document.getElementById('mainListContainer');
+  if (container) container.innerHTML = `<div class="py-16 text-center text-xs font-bold text-slate-400">正在同步遠端音檔清單與車站資料...</div>`;
+
+  const ts = Date.now();
+  const [manifestData, stopsData, mapData, tripsData] = await Promise.all([
+    safeFetchJson(`${getAudioBase()}/audio_manifest.json?v=${ts}`),
+    safeFetchJson(`${getWebDataBase()}/stops.json?v=${ts}`),
+    safeFetchJson(`${getWebDataBase()}/audio_mapping.json?v=${ts}`),
+    safeFetchJson(`${getWebDataBase()}/trips.json?v=${ts}`)
+  ]);
+
+  audioManifest = Array.isArray(manifestData) ? manifestData.map(x => String(x).replace(/\\/g, '/')) : [];
+
+  stopById.clear();
+  stopsByNormName.clear();
+  tripCatalog.clear();
+  const routeSet = new Set();
+
+  // Map optional trips.json metadata if present
+  const tripMetaByKey = new Map();
+  if (Array.isArray(tripsData)) {
+    for (const t of tripsData) {
+      const rId = String(t.routeId || t.route || '').replace(/^CTB-/i, '').toUpperCase();
+      const bnd = String(t.bound || t.dir || 'O').toUpperCase();
+      const stype = String(t.serviceType || t.service_type || '1');
+      const key = `${rId}|${bnd}|${stype}`;
+      const label = String(t.tripName || t.name || t.label || '').trim()
+        || (t.destTc ? `${rId}-${cleanJoint(t.destTc)}-${stype}` : `${rId}-${bnd}-${stype}`);
+      tripMetaByKey.set(key, { label, destTc: cleanJoint(t.destTc || '') });
+    }
+  }
+
+  const rawStops = Array.isArray(stopsData) ? stopsData : [];
+  for (const row of rawStops) {
+    const sid = String(row.stopId || '').trim();
+    if (!sid) continue;
+    const numId = sid.replace(/^0+/, '') || '0';
+    const rId = String(row.routeId || row.route || '').replace(/^CTB-/i, '').toUpperCase();
+    const bnd = String(row.bound || row.dir || 'O').toUpperCase();
+    const stype = String(row.serviceType || row.service_type || '1');
+    const seq = Number(row.seq ?? row.stopSeq ?? 0);
+
+    if (rId) routeSet.add(rId);
+
+    if (!stopById.has(sid)) {
+      const tc = cleanJoint(row.nameTc || '');
+      const en = cleanJoint(row.nameEn || '');
+      const subTc = cleanJoint(row.roadTc || row.locationTc || row.subTc || '');
+      const obj = {
+        stopId: sid, numId, nameTc: tc, subTc, nameEn: en,
+        normTc: normText(tc), routesSet: new Set()
+      };
+      stopById.set(sid, obj);
+    }
+    if (rId) stopById.get(sid).routesSet.add(rId);
+
+    if (rId) {
+      const tKey = `${rId}|${bnd}|${stype}`;
+      if (!tripCatalog.has(tKey)) {
+        const meta = tripMetaByKey.get(tKey);
+        const explicitName = String(row.tripName || row.trip_name || row.serviceName || '').trim();
+        const destTc = cleanJoint(row.destTc || row.dest_tc || meta?.destTc || '');
+        const defaultName = explicitName || meta?.label || (destTc ? `${rId}-${destTc}-${stype}` : `${rId}-${bnd === 'I' ? '回程' : '去程'}-${stype}`);
+        tripCatalog.set(tKey, { tripKey: tKey, routeId: rId, bound: bnd, serviceType: stype, defaultName, destTc, stops: [] });
+      }
+      tripCatalog.get(tKey).stops.push({ seq, stopId: sid });
+    }
+  }
+
+  // Finalize stops & sort trip stop sequences, derive terminus name if destTc was missing
+  allStops = Array.from(stopById.values()).map(v => {
+    const st = {
+      stopId: v.stopId, numId: v.numId, nameTc: v.nameTc, subTc: v.subTc,
+      nameEn: v.nameEn, normTc: v.normTc,
+      routes: Array.from(v.routesSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    };
+    stopById.set(st.stopId, st);
+    if (st.normTc) {
+      if (!stopsByNormName.has(st.normTc)) stopsByNormName.set(st.normTc, []);
+      stopsByNormName.get(st.normTc).push(st);
+    }
+    return st;
+  }).sort((a, b) => a.numId.localeCompare(b.numId, undefined, { numeric: true }));
+
+  for (const t of tripCatalog.values()) {
+    t.stops.sort((a, b) => a.seq - b.seq);
+    if (!t.destTc && t.stops.length > 0) {
+      const lastStop = stopById.get(t.stops[t.stops.length - 1].stopId);
+      if (lastStop && lastStop.nameTc && !tripMetaByKey.has(t.tripKey)) {
+        t.destTc = lastStop.nameTc;
+        t.defaultName = `${t.routeId}-${lastStop.nameTc}-${t.serviceType}`;
+      }
+    }
+  }
+
+  allRouteIds = Array.from(routeSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  mergeMappingIntoDb(mapData);
+  renderAll();
+}
+
+function updateNavButtons() {
+  document.querySelectorAll('[data-nav]').forEach(btn => {
+    if (btn.dataset.nav === activeNav) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+  });
+}
+
+function renderAll() {
+  updateNavButtons();
+  renderMainList();
+  if (selectedAudioPath) renderAudioInspector();
+}
+
+function initEvents() {
+  document.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.onclick = () => {
+      activeNav = btn.dataset.nav;
+      currentPage = 0;
+      updateNavButtons();
+      renderMainList();
+    };
+  });
+
+  document.getElementById('mainSearchInput').oninput = () => { currentPage = 0; renderMainList(); };
+  document.getElementById('audioScopeFilter').onchange = () => { currentPage = 0; renderMainList(); };
+  document.getElementById('missingViewMode').onchange = () => { currentPage = 0; renderMainList(); };
+  document.getElementById('missingTripSelect').onchange = (e) => { selectedMissingTripKey = e.target.value; renderMainList(); };
+  document.getElementById('btnPrevPage').onclick = () => { if (currentPage > 0) { currentPage--; renderMainList(); } };
+  document.getElementById('btnNextPage').onclick = () => { currentPage++; renderMainList(); };
+  document.getElementById('btnCloseInspectorMobile').onclick = hideInspectorMobile;
+
+  document.getElementById('btnAddCustomTrip').onclick = () => {
+    const rId = (document.getElementById('newTripRouteInput').value || '').trim().toUpperCase();
+    const name = (document.getElementById('newTripNameInput').value || '').trim();
+    if (!name) { showToast('請輸入班次名稱'); return; }
+    const key = `MANUAL|${rId || 'ALL'}|${Date.now()}`;
+    studioDb.customTrips[key] = { name, routeId: rId, bound: 'O', serviceType: 'CUSTOM', isManual: true };
+    document.getElementById('newTripRouteInput').value = '';
+    document.getElementById('newTripNameInput').value = '';
+    saveDb();
+    showToast(`已新增路線班次：${name}`);
+    renderMainList();
+  };
+
+  document.getElementById('btnRestoreIgnored').onclick = () => {
+    const cnt = Object.keys(studioDb.ignored || {}).length;
+    if (!cnt) { showToast('目前沒有已忽略音檔'); return; }
+    studioDb.ignored = {};
+    saveDb();
+    showToast(`已復原 ${cnt} 個已忽略音檔`);
+    renderAll();
+  };
+
+  document.getElementById('btnExportJson').onclick = () => {
+    downloadJson(buildExportPayload(), 'audio_mapping.json');
+    showToast('已匯出 audio_mapping.json');
+  };
+  document.getElementById('btnPublishWeb').onclick = publishToWebRepo;
+  document.getElementById('btnReloadData').onclick = loadRemoteData;
+
+  document.getElementById('importJsonInput').onchange = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const parsed = JSON.parse(await f.text());
+      mergeMappingIntoDb(parsed);
+      saveDb();
+      showToast('已成功匯入對照表 JSON');
+      renderAll();
+    } catch (err) {
+      showToast('匯入失敗：' + err.message);
+    }
+    e.target.value = '';
+  };
+
+  // Settings modal
+  const sModal = document.getElementById('settingsModal');
+  document.getElementById('btnOpenSettings').onclick = () => {
+    document.getElementById('cfgAudioBase').value = getAudioBase();
+    document.getElementById('cfgWebDataBase').value = getWebDataBase();
+    document.getElementById('cfgGhToken').value = getGhToken();
+    document.getElementById('cfgFbUrl').value = getFbUrl();
+    sModal.classList.remove('hidden');
+  };
+  document.getElementById('btnCloseSettings').onclick = () => sModal.classList.add('hidden');
+  document.getElementById('btnResetDefaults').onclick = () => {
+    document.getElementById('cfgAudioBase').value = DEFAULT_AUDIO_BASE;
+    document.getElementById('cfgWebDataBase').value = DEFAULT_WEB_DATA_BASE;
+  };
+  document.getElementById('btnSaveSettings').onclick = () => {
+    localStorage.setItem(KEY_CFG_AUDIO, document.getElementById('cfgAudioBase').value.trim() || DEFAULT_AUDIO_BASE);
+    localStorage.setItem(KEY_CFG_WEBDATA, document.getElementById('cfgWebDataBase').value.trim() || DEFAULT_WEB_DATA_BASE);
+    localStorage.setItem(KEY_CFG_GH, document.getElementById('cfgGhToken').value.trim());
+    localStorage.setItem(KEY_CFG_FB, document.getElementById('cfgFbUrl').value.trim());
+    sModal.classList.add('hidden');
+    startFbSyncLoop();
+    loadRemoteData();
+    showToast('設定已儲存並重新連線');
+  };
+}
+
+function boot() {
+  try {
+    const raw = localStorage.getItem(KEY_STUDIO_DB);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        studioDb = {
+          rules: parsed.rules || {},
+          ignored: parsed.ignored || {},
+          customTrips: parsed.customTrips || {}
+        };
+      }
+    }
+  } catch (_) {}
+
+  initEvents();
+  startFbSyncLoop();
+  loadRemoteData();
+}
+
+boot();
+</script>
+</body>
+</html>
