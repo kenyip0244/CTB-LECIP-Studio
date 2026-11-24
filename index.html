@@ -134,6 +134,9 @@
       <button data-nav="welcome" class="tablet-tab min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 whitespace-nowrap bg-slate-100">
         歡迎詞 <span data-cnt="welcome" class="px-1.5 py-0.5 rounded bg-black/10 text-[11px]">0</span>
       </button>
+      <button data-nav="special" class="tablet-tab min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 whitespace-nowrap bg-slate-100">
+        特別廣播 <span data-cnt="special" class="px-1.5 py-0.5 rounded bg-black/10 text-[11px]">0</span>
+      </button>
       <button data-nav="missing" class="tablet-tab min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 whitespace-nowrap bg-slate-100">
         缺失車站 <span data-cnt="missing" class="px-1.5 py-0.5 rounded bg-black/10 text-[11px]">0</span>
       </button>
@@ -164,6 +167,10 @@
         <button data-nav="welcome" class="rail-btn w-full min-h-[42px] px-3 py-2 rounded-lg text-xs font-bold hover:bg-[#15263B] flex items-center justify-between gap-2">
           <span class="flex items-center gap-2.5"><span class="rail-dot w-1.5 h-4 rounded-full bg-transparent"></span>歡迎詞管理</span>
           <span data-cnt="welcome" class="px-2 py-0.5 rounded-md bg-amber-950 text-amber-300 text-[11px]">0</span>
+        </button>
+        <button data-nav="special" class="rail-btn w-full min-h-[42px] px-3 py-2 rounded-lg text-xs font-bold hover:bg-[#15263B] flex items-center justify-between gap-2">
+          <span class="flex items-center gap-2.5"><span class="rail-dot w-1.5 h-4 rounded-full bg-transparent"></span>特別廣播</span>
+          <span data-cnt="special" class="px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 text-[11px]">0</span>
         </button>
         <button data-nav="missing" class="rail-btn w-full min-h-[42px] px-3 py-2 rounded-lg text-xs font-bold hover:bg-[#15263B] flex items-center justify-between gap-2">
           <span class="flex items-center gap-2.5"><span class="rail-dot w-1.5 h-4 rounded-full bg-transparent"></span>缺失車站</span>
@@ -310,7 +317,7 @@
   </div>
 
   <!-- Phone Bottom Navigation Bar (< 768px) -->
-  <nav id="mobileBottomNav" class="md:hidden bg-white border-t border-[#DCE3EC] grid grid-cols-6 shrink-0 z-20 safe-bottom">
+  <nav id="mobileBottomNav" class="md:hidden bg-white border-t border-[#DCE3EC] grid grid-cols-7 shrink-0 z-20 safe-bottom">
     <button data-nav="unmatched" aria-current="page" class="mobile-tab py-2 flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold text-slate-500">
       <span class="mtab-pill px-3 py-0.5 rounded-full flex items-center gap-1">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
@@ -328,6 +335,10 @@
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
       </span>
       <span>歡迎詞 <b data-cnt="welcome" class="font-extrabold">0</b></span>
+    </button>
+    <button data-nav="special" class="mobile-tab py-2 flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold text-slate-500">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15.54 8.46a5 5 0 010 7.07"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.07 4.93a10 10 0 010 14.14"/></svg>
+      <span class="whitespace-nowrap">特別 <span data-cnt="special">0</span></span>
     </button>
     <button data-nav="missing" class="mobile-tab py-2 flex flex-col items-center justify-center gap-0.5 text-[11px] font-bold text-slate-500">
       <span class="mtab-pill px-3 py-0.5 rounded-full">
@@ -567,6 +578,7 @@ let tripCatalog = new Map();
 let studioDb = {
   rules: {},        // audioPath -> { audioPath, stopIds, routeMode, routes, tripMode, tripNames, note, updatedAt, updatedBy }
   welcomeRules: {}, // audioPath -> { audioPath, scope, routes, tripNames, note, updatedAt, updatedBy }
+  specialBroadcasts: {}, // audioPath -> { audioPath, kind, stopIds, routeMode, routes, tripMode, tripNames, locationName, lat, lng, radiusM, excludeRoutes, intervalMin, note, updatedAt, updatedBy }
   ignored: {},      // audioPath -> { audioPath, by, at }
   customTrips: {}   // tripKey -> { tripKey, name, routeId, bound, serviceType, isManual, updatedBy }
 };
@@ -585,6 +597,8 @@ let selectedMissingStopId = '';
 let selectedMissingTripKey = '';
 let selectedTripKey = '';
 let selectedIgnoredPath = '';
+let selectedSpecialPath = '';
+let specialSubFilter = 'all';
 let currentFilteredTripKeys = [];
 let tripEditMode = false;
 let showDeletedTrips = false;
@@ -770,7 +784,7 @@ async function uploadFullLocalDbToRoom() {
   const base = roomBaseUrl();
   if (!base) return false;
   try {
-    for (const col of ['rules', 'welcomeRules', 'ignored', 'customTrips']) {
+    for (const col of ['rules', 'welcomeRules', 'specialBroadcasts', 'ignored', 'customTrips']) {
       const entries = Object.entries(studioDb[col] || {});
       if (!entries.length) continue;
       const patchObj = {};
@@ -822,7 +836,7 @@ async function pullFullRoomNow(silent = true) {
 async function pushPresence() {
   const base = roomBaseUrl();
   if (!base) { renderPresenceUi(); return; }
-  const activeItem = selectedAudioPath || selectedWelcomePath || selectedMissingStopId || selectedTripKey || selectedIgnoredPath || '';
+  const activeItem = selectedAudioPath || selectedWelcomePath || selectedSpecialPath || selectedMissingStopId || selectedTripKey || selectedIgnoredPath || '';
   const me = { name: getMyName(), color: MY_COLOR, activeItem, lastSeen: Date.now() };
   onlinePeers[CLIENT_ID] = me;
   renderPresenceUi();
@@ -917,6 +931,11 @@ function applyRoomRootSnapshot(data) {
       for (const v of Object.values(obj)) {
         if (v && v[keyField]) {
           const item = { ...v };
+          for (const af of ['stopIds', 'routes', 'excludeRoutes', 'tripNames']) {
+            if (item[af] && !Array.isArray(item[af]) && typeof item[af] === 'object') {
+              item[af] = Object.keys(item[af]).sort((a, b) => Number(a) - Number(b)).map(k => item[af][k]).filter(x => x != null && x !== '');
+            }
+          }
           if (item.customStops && !Array.isArray(item.customStops) && typeof item.customStops === 'object') {
             item.customStops = Object.keys(item.customStops)
               .sort((a, b) => Number(a) - Number(b))
@@ -957,6 +976,7 @@ function applyRoomRootSnapshot(data) {
   else if (selectedWelcomePath && document.activeElement?.tagName !== 'INPUT') renderWelcomeInspector();
   else if (selectedTripKey && document.activeElement?.tagName !== 'INPUT') renderTripInspector();
   else if (selectedIgnoredPath && document.activeElement?.tagName !== 'INPUT') renderIgnoredInspector();
+  else if (selectedSpecialPath && document.activeElement?.tagName !== 'INPUT') renderSpecialInspector();
 }
 
 function startRealtimeCollab() {
@@ -1386,7 +1406,7 @@ function updateCounters() {
     if (isWelcomeCandidatePath(p)) welcomeSet.add(p);
     if (!filterAudioCategory(p)) continue;
     if (isAudioProcessed(p)) processedCnt++;
-    else if (!studioDb.welcomeRules?.[p]) unmatchedCnt++;
+    else if (!studioDb.welcomeRules?.[p] && !studioDb.specialBroadcasts?.[p]) unmatchedCnt++;
   }
   const welcomeCnt = Array.from(welcomeSet).filter(p => !studioDb.ignored[p]).length;
   let coveredStops = 0;
@@ -1396,7 +1416,8 @@ function updateCounters() {
   const missingStops = Math.max(0, allStops.length - coveredStops);
   const tripsCnt = getAllTripEntries().length;
 
-  const mapCounts = { unmatched: unmatchedCnt, processed: processedCnt, welcome: welcomeCnt, missing: missingStops, trips: tripsCnt };
+  const specialCnt = Object.keys(studioDb.specialBroadcasts || {}).filter(p => !studioDb.ignored[p]).length;
+  const mapCounts = { unmatched: unmatchedCnt, processed: processedCnt, welcome: welcomeCnt, special: specialCnt, missing: missingStops, trips: tripsCnt };
   for (const [k, v] of Object.entries(mapCounts)) {
     document.querySelectorAll(`[data-cnt="${k}"]`).forEach(el => { el.textContent = String(v); });
   }
@@ -1454,7 +1475,7 @@ function renderMainList() {
       if (studioDb.ignored[path]) return false;
       if (!filterAudioCategory(path)) return false;
       const proc = isAudioProcessed(path);
-      if (activeNav === 'unmatched' && (proc || Boolean(studioDb.welcomeRules?.[path]))) return false;
+      if (activeNav === 'unmatched' && (proc || Boolean(studioDb.welcomeRules?.[path]) || Boolean(studioDb.specialBroadcasts?.[path]))) return false;
       if (activeNav === 'processed' && !proc) return false;
       if (kw) {
         const r = studioDb.rules[path];
@@ -1554,6 +1575,145 @@ function renderMainList() {
 
     container.querySelectorAll('[data-select-welcome]').forEach(row => {
       row.onclick = (e) => { if (!e.target.closest('button')) selectWelcomeForInspector(row.dataset.selectWelcome); };
+    });
+    container.querySelectorAll('[data-play-btn]').forEach(b => {
+      b.onclick = (e) => { e.stopPropagation(); togglePlayAudio(b.dataset.playBtn); };
+    });
+    syncPlayerUi();
+    return;
+  }
+
+  // 3B. Special Broadcasts Tab
+  if (activeNav === 'special') {
+    pageFooter.classList.remove('hidden');
+    const allSpecial = Object.values(studioDb.specialBroadcasts || {})
+      .filter(s => s && s.audioPath && !studioDb.ignored[s.audioPath]);
+
+    const cntAfter = allSpecial.filter(s => (s.kind || 'after_stop') === 'after_stop').length;
+    const cntLoc = allSpecial.filter(s => s.kind === 'location').length;
+    const cntRand = allSpecial.filter(s => s.kind === 'random_all').length;
+
+    const list = allSpecial.filter(s => {
+      const k = s.kind || 'after_stop';
+      if (specialSubFilter !== 'all' && k !== specialSubFilter) return false;
+      if (!kw) return true;
+      const stopNames = (s.stopIds || []).map(id => formatStopFullTc(stopById.get(id))).join(' ');
+      return `${s.audioPath} ${s.locationName || ''} ${(s.routes || []).join(' ')} ${(s.excludeRoutes || []).join(' ')} ${stopNames} ${s.note || ''}`.toLowerCase().includes(kw);
+    }).sort((a, b) => (Date.parse(b.updatedAt || '') || 0) - (Date.parse(a.updatedAt || '') || 0));
+
+    currentFilteredPaths = list.map(x => x.audioPath);
+
+    const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    if (currentPage >= totalPages) currentPage = totalPages - 1;
+    if (currentPage < 0) currentPage = 0;
+    const slice = list.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+    document.getElementById('pageStatusText').textContent = `第 ${currentPage + 1} / ${totalPages} 頁（${list.length} 條特別廣播）`;
+    document.getElementById('btnPrevPage').disabled = currentPage <= 0;
+    document.getElementById('btnNextPage').disabled = currentPage >= totalPages - 1;
+
+    const pillCls = (val) => specialSubFilter === val
+      ? 'px-2.5 py-1 rounded-lg bg-[#0B1622] text-white text-[11px] font-black'
+      : 'px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-700 text-[11px] font-bold hover:bg-slate-100';
+
+    const topTools = `
+      <div class="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 space-y-2">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button data-sp-filter="all" class="${pillCls('all')}">全部 (${allSpecial.length})</button>
+          <button data-sp-filter="after_stop" class="${pillCls('after_stop')}">車站後 (${cntAfter})</button>
+          <button data-sp-filter="location" class="${pillCls('location')}">指定地點 (${cntLoc})</button>
+          <button data-sp-filter="random_all" class="${pillCls('random_all')}">全線隨機5分鐘 (${cntRand})</button>
+        </div>
+        <div class="relative">
+          <input id="specialAddAudioSearch" type="text" placeholder="＋ 搜尋音檔名加入特別廣播（或喺未配對按「改為特別廣播」）..." class="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-white border border-indigo-300 text-xs font-bold focus:border-[#0052CC]" />
+          <div id="specialAddAudioRes" class="hidden mt-1.5 max-h-48 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl shadow-sm"></div>
+        </div>
+      </div>
+    `;
+
+    container.innerHTML = topTools + (slice.length ? slice.map(s => {
+      const fn = s.audioPath.split('/').pop();
+      const k = s.kind || 'after_stop';
+      let badge = '';
+      let summary = '';
+      if (k === 'after_stop') {
+        badge = `<span class="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-[#0052CC] text-[10px] font-black">車站後</span>`;
+        const stTxt = (s.stopIds || []).slice(0, 2).map(id => formatStopFullTc(stopById.get(id)) || `#${id}`).join('、') + ((s.stopIds || []).length > 2 ? ` 等${s.stopIds.length}站` : '');
+        const rTxt = s.routeMode === 'specific'
+          ? `只限 ${(s.routes || []).slice(0, 4).join('/') || '未選路線'}`
+          : (s.routeMode === 'exclude' ? `排除 ${(s.routes || []).slice(0, 4).join('/') || '無'}` : '所有途經路線');
+        summary = `${stTxt || '尚未綁定車站'}・${rTxt}`;
+      } else if (k === 'location') {
+        badge = `<span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[10px] font-black">指定地點</span>`;
+        const coordTxt = (s.lat != null && s.lng != null) ? `${Number(s.lat).toFixed(4)}, ${Number(s.lng).toFixed(4)} (${s.radiusM || 80}m)` : '未設座標';
+        const exTxt = (s.excludeRoutes || []).length ? `・不適用 ${s.excludeRoutes.slice(0, 4).join('/')}` : '・全線適用';
+        summary = `${s.locationName || coordTxt}${exTxt}`;
+      } else {
+        badge = `<span class="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-800 text-[10px] font-black">全線隨機 (每5分鐘)</span>`;
+        const exTxt = (s.excludeRoutes || []).length ? `不適用 ${s.excludeRoutes.slice(0, 4).join('/')}` : '全線所有路線自動隨機抽播';
+        summary = exTxt;
+      }
+
+      return `
+        <div data-select-special="${esc(s.audioPath)}" data-selected="${selectedSpecialPath === s.audioPath}" class="work-row px-3.5 py-3 cursor-pointer flex items-center justify-between gap-2.5 min-h-[66px]">
+          <div class="min-w-0 flex-1 space-y-1">
+            <div class="flex items-center gap-1.5 min-w-0">
+              ${badge}
+              <span class="text-[13px] font-black text-slate-900 truncate">${esc(fn)}</span>
+            </div>
+            <div class="text-[11px] font-semibold text-slate-500 truncate">${esc(summary)}${s.note ? `・${esc(s.note)}` : ''}</div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button data-play-btn="${esc(s.audioPath)}" class="min-h-[34px] px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold">試聽</button>
+          </div>
+        </div>
+      `;
+    }).join('') : `<div class="py-16 px-4 text-center text-xs font-bold text-slate-400">尚未設定此類別特別廣播，可用上方搜尋框加入音檔，或於音檔配對點「改為特別廣播」。</div>`);
+
+    container.querySelectorAll('[data-sp-filter]').forEach(b => {
+      b.onclick = () => { specialSubFilter = b.dataset.spFilter; currentPage = 0; renderMainList(); };
+    });
+
+    const addInp = document.getElementById('specialAddAudioSearch');
+    const addRes = document.getElementById('specialAddAudioRes');
+    if (addInp && addRes) {
+      addInp.oninput = () => {
+        const q = addInp.value.trim().toLowerCase();
+        if (!q) { addRes.classList.add('hidden'); return; }
+        const hits = audioManifest.filter(p => !studioDb.ignored[p] && p.toLowerCase().includes(q)).slice(0, 25);
+        addRes.classList.remove('hidden');
+        addRes.innerHTML = hits.length ? hits.map(p => {
+          const exists = Boolean(studioDb.specialBroadcasts?.[p]);
+          return `<button type="button" data-pick-sp-audio="${esc(p)}" class="w-full px-3 py-2 text-left hover:bg-indigo-50 flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="text-xs font-black text-slate-900 truncate">${esc(p.split('/').pop())}</div>
+              <div class="text-[10px] text-slate-400 truncate">${esc(p)}</div>
+            </div>
+            <span class="px-2 py-1 rounded-lg text-[11px] font-bold shrink-0 ${exists ? 'bg-emerald-100 text-emerald-800' : 'bg-[#0052CC] text-white'}">${exists ? '編輯' : '加入'}</span>
+          </button>`;
+        }).join('') : `<div class="p-3 text-center text-xs text-slate-400">找不到符合的音檔</div>`;
+
+        addRes.querySelectorAll('[data-pick-sp-audio]').forEach(b => {
+          b.onclick = () => {
+            const p = b.dataset.pickSpAudio;
+            const defKind = specialSubFilter !== 'all' ? specialSubFilter : 'after_stop';
+            const rec = ensureSpecialBroadcast(p, defKind);
+            rec.updatedAt = new Date().toISOString();
+            rec.updatedBy = getMyName();
+            syncAtomicRecord('specialBroadcasts', p, rec);
+            addInp.value = '';
+            addRes.classList.add('hidden');
+            selectSpecialForInspector(p);
+          };
+        });
+      };
+    }
+
+    container.querySelectorAll('[data-select-special]').forEach(row => {
+      row.onclick = (e) => {
+        if (e.target.closest('button')) return;
+        selectSpecialForInspector(row.dataset.selectSpecial);
+      };
     });
     container.querySelectorAll('[data-play-btn]').forEach(b => {
       b.onclick = (e) => { e.stopPropagation(); togglePlayAudio(b.dataset.playBtn); };
@@ -1923,12 +2083,13 @@ function moveToSiblingAudio(delta) {
     return;
   }
   if (!currentFilteredPaths.length) return;
-  const cur = selectedAudioPath || selectedWelcomePath;
+  const cur = selectedAudioPath || selectedWelcomePath || selectedSpecialPath || selectedIgnoredPath;
   const idx = currentFilteredPaths.indexOf(cur);
   const nextIdx = idx === -1 ? 0 : Math.max(0, Math.min(currentFilteredPaths.length - 1, idx + delta));
   const target = currentFilteredPaths[nextIdx];
   if (!target) return;
   if (activeNav === 'welcome') selectWelcomeForInspector(target);
+  else if (activeNav === 'special') selectSpecialForInspector(target);
   else if (activeNav === 'ignored') selectIgnoredForInspector(target);
   else selectAudioForInspector(target);
 }
@@ -1939,6 +2100,7 @@ function selectAudioForInspector(audioPath) {
   selectedMissingStopId = '';
   selectedTripKey = '';
   selectedIgnoredPath = '';
+  selectedSpecialPath = '';
   pushPresence();
   renderMainList();
   renderAudioInspector();
@@ -2084,6 +2246,7 @@ function renderAudioInspector() {
       <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-2">
         <input id="inspNoteInput" type="text" value="${esc(rule.note || '')}" placeholder="備註（選填，例如：轉乘廣播版）" class="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold" />
         <button id="btnConvertToWelcome" class="min-h-[42px] px-3.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold shrink-0">改為歡迎詞</button>
+        <button id="btnConvertToSpecial" class="min-h-[42px] px-3.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-900 text-xs font-bold shrink-0">改為特別廣播</button>
       </div>
     </div>
   `;
@@ -2228,6 +2391,24 @@ function renderAudioInspector() {
 
   document.getElementById('inspNoteInput').onchange = (e) => { rule.note = e.target.value.trim(); commitRule(); };
 
+  document.getElementById('btnConvertToSpecial').onclick = () => {
+    const p = selectedAudioPath;
+    if (!p) return;
+    if (studioDb.rules[p]) {
+      delete studioDb.rules[p];
+      syncAtomicRecord('rules', p, null);
+    }
+    const rec = ensureSpecialBroadcast(p, 'after_stop');
+    rec.note = rule.note || rec.note || '';
+    rec.updatedAt = new Date().toISOString();
+    rec.updatedBy = getMyName();
+    syncAtomicRecord('specialBroadcasts', p, rec);
+    activeNav = 'special';
+    specialSubFilter = 'all';
+    syncNavAndPillsUi();
+    showToast('已轉為特別廣播，請選擇觸發模式');
+    selectSpecialForInspector(p);
+  };
   document.getElementById('btnConvertToWelcome').onclick = () => {
     const p = selectedAudioPath;
     const w = ensureWelcomeRule(p);
@@ -2290,6 +2471,7 @@ function selectWelcomeForInspector(path) {
   selectedMissingStopId = '';
   selectedTripKey = '';
   selectedIgnoredPath = '';
+  selectedSpecialPath = '';
   pushPresence();
   renderMainList();
   renderWelcomeInspector();
@@ -2423,6 +2605,7 @@ function selectMissingStopForInspector(stopId, contextTrip) {
   selectedWelcomePath = '';
   selectedTripKey = '';
   selectedIgnoredPath = '';
+  selectedSpecialPath = '';
   pushPresence();
   renderMainList();
   renderMissingStopInspector(stopId, contextTrip);
@@ -2519,6 +2702,505 @@ function renderMissingStopInspector(stopId, contextTrip) {
     };
   }
   refresh();
+}
+
+function ensureSpecialBroadcast(path, defaultKind = 'after_stop') {
+  studioDb.specialBroadcasts = studioDb.specialBroadcasts || {};
+  if (!studioDb.specialBroadcasts[path]) {
+    studioDb.specialBroadcasts[path] = {
+      audioPath: path,
+      kind: defaultKind,
+      stopIds: [],
+      routeMode: 'all',
+      routes: [],
+      tripMode: 'all',
+      tripNames: [],
+      locationName: '',
+      lat: null,
+      lng: null,
+      radiusM: 80,
+      excludeRoutes: [],
+      intervalMin: 5,
+      note: '',
+      updatedAt: new Date().toISOString(),
+      updatedBy: getMyName()
+    };
+  }
+  const s = studioDb.specialBroadcasts[path];
+  if (!Array.isArray(s.stopIds)) s.stopIds = [];
+  if (!Array.isArray(s.routes)) s.routes = [];
+  if (!Array.isArray(s.tripNames)) s.tripNames = [];
+  if (!Array.isArray(s.excludeRoutes)) s.excludeRoutes = [];
+  if (!s.kind) s.kind = defaultKind;
+  if (!s.routeMode) s.routeMode = 'all';
+  if (!s.tripMode) s.tripMode = 'all';
+  if (!s.radiusM) s.radiusM = 80;
+  if (!s.intervalMin) s.intervalMin = 5;
+  return s;
+}
+
+function selectSpecialForInspector(path) {
+  selectedSpecialPath = path;
+  selectedAudioPath = '';
+  selectedWelcomePath = '';
+  selectedMissingStopId = '';
+  selectedTripKey = '';
+  selectedIgnoredPath = '';
+  pushPresence();
+  renderMainList();
+  renderSpecialInspector();
+  openMobileInspector();
+}
+
+function renderSpecialInspector() {
+  const titleEl = document.getElementById('inspectorTitle');
+  const subEl = document.getElementById('inspectorSubtitle');
+  const body = document.getElementById('inspectorBody');
+  const footer = document.getElementById('inspectorFooter');
+  const qNav = document.getElementById('inspectorQuickNav');
+  if (!selectedSpecialPath || !body) return;
+
+  const sp = ensureSpecialBroadcast(selectedSpecialPath);
+  const fn = selectedSpecialPath.split('/').pop();
+  const coverageMap = buildStopCoverageIndex();
+  const boundStops = sp.stopIds.map(id => stopById.get(id)).filter(Boolean);
+  const allTrips = getAllTripEntries();
+  const randCount = Object.values(studioDb.specialBroadcasts || {}).filter(x => x && x.kind === 'random_all' && !studioDb.ignored[x.audioPath]).length;
+
+  titleEl.textContent = fn;
+  subEl.textContent = `特別廣播設定・${selectedSpecialPath}`;
+  qNav.classList.remove('hidden');
+
+  const commitSp = (rerender = false) => {
+    sp.updatedAt = new Date().toISOString();
+    sp.updatedBy = getMyName();
+    syncAtomicRecord('specialBroadcasts', selectedSpecialPath, sp);
+    renderMainList();
+    if (rerender) renderSpecialInspector();
+  };
+
+  const tabBtnCls = (k) => sp.kind === k
+    ? (k === 'after_stop' ? 'bg-[#0052CC] text-white border-[#0052CC]'
+      : k === 'location' ? 'bg-amber-500 text-white border-amber-500'
+      : 'bg-purple-700 text-white border-purple-700')
+    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
+
+  const afterStopCard = `
+    <!-- 車站後特別廣播 -->
+    <div class="bg-white rounded-2xl border border-[#DCE3EC] p-4 space-y-4">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="text-sm font-black text-slate-900">觸發車站（播完該站報站後自動緊接播放）</h3>
+        <span class="text-xs font-bold text-[#0052CC]">已綁定 ${boundStops.length} 站</span>
+      </div>
+
+      ${boundStops.length ? `
+        <div class="flex flex-wrap gap-1.5">
+          ${boundStops.map(st => `
+            <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 text-xs font-bold">
+              <span>${esc(formatStopFullTc(st))} <span class="text-[11px] text-[#0052CC]">#${esc(st.numId)}</span></span>
+              <button data-sp-rm-stop="${esc(st.stopId)}" class="w-5 h-5 rounded-md hover:bg-blue-200 flex items-center justify-center font-black">×</button>
+            </span>
+          `).join('')}
+        </div>
+      ` : `<div class="text-xs font-semibold text-slate-400">尚未選擇車站，請於下方搜尋並加入。</div>`}
+
+      <div class="relative">
+        <input id="spStopSearch" type="text" placeholder="搜尋中文站名、街道、英文名、站號或路線..." class="w-full min-h-[42px] px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold focus:bg-white focus:border-[#0052CC]" />
+        <div id="spStopResults" class="hidden mt-1.5 max-h-52 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl shadow-sm"></div>
+      </div>
+
+      <!-- 適用路線 -->
+      <div class="pt-3 border-t border-slate-100 space-y-2.5">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <span class="text-xs font-black text-slate-800">適用路線範圍</span>
+          <div class="inline-flex rounded-xl bg-slate-100 p-1 text-xs font-bold">
+            <button data-sp-rmode="all" class="px-2.5 py-1.5 rounded-lg ${sp.routeMode === 'all' ? 'bg-[#0B1622] text-white' : 'text-slate-600'}">所有途經路線</button>
+            <button data-sp-rmode="specific" class="px-2.5 py-1.5 rounded-lg ${sp.routeMode === 'specific' ? 'bg-[#0052CC] text-white' : 'text-slate-600'}">只限指定</button>
+            <button data-sp-rmode="exclude" class="px-2.5 py-1.5 rounded-lg ${sp.routeMode === 'exclude' ? 'bg-[#D0302F] text-white' : 'text-slate-600'}">排除指定</button>
+          </div>
+        </div>
+        ${sp.routeMode !== 'all' ? `
+          <div class="space-y-2">
+            ${sp.routes.length ? `
+              <div class="flex flex-wrap gap-1.5">
+                ${sp.routes.map(r => `
+                  <span class="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-lg ${sp.routeMode === 'exclude' ? 'bg-red-50 border-red-200 text-[#D0302F]' : 'bg-blue-50 border-blue-200 text-[#0052CC]'} border text-xs font-black">
+                    ${esc(r)} <button data-sp-rm-route="${esc(r)}" class="w-4 h-4 font-black">×</button>
+                  </span>
+                `).join('')}
+              </div>
+            ` : `<div class="text-[11px] font-semibold text-slate-400">請搜尋並點選路線編號</div>`}
+            <input id="spRouteSearch" type="text" placeholder="搜尋路線編號（如 102、A21、969）..." class="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold" />
+            <div id="spRoutePicker" class="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200"></div>
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- 適用班次 -->
+      <div class="pt-3 border-t border-slate-100 space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-black text-slate-800">適用班次</span>
+          <div class="inline-flex rounded-xl bg-slate-100 p-1 text-xs font-bold">
+            <button data-sp-tmode="all" class="px-2.5 py-1.5 rounded-lg ${sp.tripMode !== 'specific' ? 'bg-[#0B1622] text-white' : 'text-slate-600'}">所有班次</button>
+            <button data-sp-tmode="specific" class="px-2.5 py-1.5 rounded-lg ${sp.tripMode === 'specific' ? 'bg-[#0052CC] text-white' : 'text-slate-600'}">指定班次</button>
+          </div>
+        </div>
+        ${sp.tripMode === 'specific' ? `
+          <div class="space-y-2">
+            ${sp.tripNames.length ? `
+              <div class="flex flex-wrap gap-1.5">
+                ${sp.tripNames.map(tn => `
+                  <span class="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-bold">
+                    ${esc(tn)} <button data-sp-rm-trip="${esc(tn)}" class="w-4 h-4 font-black">×</button>
+                  </span>
+                `).join('')}
+              </div>
+            ` : ''}
+            <input id="spTripSearch" type="text" placeholder="搜尋班次名稱（如 102、美孚）..." class="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold" />
+            <div id="spTripPicker" class="max-h-36 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl"></div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  const locationCard = `
+    <!-- 指定地點特別廣播（可選不適用路線） -->
+    <div class="bg-white rounded-2xl border border-[#DCE3EC] p-4 space-y-4">
+      <div>
+        <h3 class="text-sm font-black text-slate-900">指定地點 GPS 觸發設定</h3>
+        <p class="text-[11px] font-semibold text-slate-500 mt-0.5">行車 GPS 進入指定座標半徑範圍即自動播放（不打斷車站報站，離開範圍再折返先會重播）。</p>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-black text-slate-700">快速從車站代入座標（選填）</label>
+        <input id="spLocStopPick" type="text" placeholder="搜尋任何車站一鍵代入地點名及經緯度..." class="w-full min-h-[40px] px-3 py-1.5 rounded-xl bg-amber-50/70 border border-amber-300 text-xs font-bold focus:bg-white" />
+        <div id="spLocStopRes" class="hidden max-h-40 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl"></div>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-black text-slate-700">地點名稱</label>
+        <input id="spLocName" type="text" value="${esc(sp.locationName || '')}" placeholder="例如：紅磡海底隧道入口、西區海底隧道、青馬大橋" class="w-full min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold focus:bg-white focus:border-[#0052CC]" />
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-black text-slate-700">貼上 Google Maps 座標（格式：緯度, 經度）或分別填寫</label>
+        <input id="spCoordPaste" type="text" placeholder="直接貼上如 22.30123, 114.18156 即自動分拆填入" class="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold" />
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 mb-1">緯度 (Lat)</label>
+            <input id="spLatInp" type="number" step="0.000001" value="${sp.lat != null ? sp.lat : ''}" placeholder="22.3012" class="w-full min-h-[40px] px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-black" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 mb-1">經度 (Lng)</label>
+            <input id="spLngInp" type="number" step="0.000001" value="${sp.lng != null ? sp.lng : ''}" placeholder="114.1815" class="w-full min-h-[40px] px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-black" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-500 mb-1">半徑 (米)</label>
+            <input id="spRadInp" type="number" min="15" max="1500" step="5" value="${sp.radiusM || 80}" class="w-full min-h-[40px] px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-black" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 不適用路線（排除清單） -->
+      <div class="pt-3 border-t border-slate-100 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-black text-slate-800">不適用路線（排除以下路線，留空代表全線適用）</span>
+          <span class="text-[11px] font-bold text-[#D0302F]">已排除 ${sp.excludeRoutes.length} 條</span>
+        </div>
+        ${sp.excludeRoutes.length ? `
+          <div class="flex flex-wrap gap-1.5">
+            ${sp.excludeRoutes.map(r => `
+              <span class="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-lg bg-red-50 border border-red-200 text-[#D0302F] text-xs font-black">
+                不適用 ${esc(r)} <button data-sp-rm-exroute="${esc(r)}" class="w-4 h-4 font-black">×</button>
+              </span>
+            `).join('')}
+          </div>
+        ` : `<div class="text-[11px] font-semibold text-emerald-700">目前沒有排除路線（所有路線經過此地點都會自動播放）。</div>`}
+        <input id="spExRouteSearch" type="text" placeholder="搜尋不適用路線編號（如 A21、102、NA29）..." class="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold" />
+        <div id="spExRoutePicker" class="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200"></div>
+      </div>
+    </div>
+  `;
+
+  const randomCard = `
+    <!-- 全線隨機自動廣播（每隔 5 分鐘） -->
+    <div class="bg-white rounded-2xl border border-[#DCE3EC] p-4 space-y-4">
+      <div class="rounded-xl bg-purple-50 border border-purple-200 p-3.5 space-y-1">
+        <div class="text-sm font-black text-purple-950">全線隨機自動廣播池（目前共 ${randCount} 條音檔）</div>
+        <div class="text-xs font-semibold text-purple-900">
+          行車期間報站器會每隔 <b>5 分鐘</b> 自動從此廣播池隨機抽播一條（不會連續重複同一條；若正在播報車站或處於事故模式，會自動順延不打斷報站）。
+        </div>
+      </div>
+
+      <!-- 選填：不適用路線 -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-black text-slate-800">不適用路線（選填，留空則全線適用）</span>
+          <span class="text-[11px] font-bold text-[#D0302F]">已排除 ${sp.excludeRoutes.length} 條</span>
+        </div>
+        ${sp.excludeRoutes.length ? `
+          <div class="flex flex-wrap gap-1.5">
+            ${sp.excludeRoutes.map(r => `
+              <span class="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-lg bg-red-50 border border-red-200 text-[#D0302F] text-xs font-black">
+                不適用 ${esc(r)} <button data-sp-rm-exroute="${esc(r)}" class="w-4 h-4 font-black">×</button>
+              </span>
+            `).join('')}
+          </div>
+        ` : ''}
+        <input id="spExRouteSearch" type="text" placeholder="搜尋不適用路線編號（選填）..." class="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold" />
+        <div id="spExRoutePicker" class="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200"></div>
+      </div>
+    </div>
+  `;
+
+  body.innerHTML = `
+    ${renderPlayerHtml(selectedSpecialPath)}
+
+    <!-- 類型切換卡片 -->
+    <div class="bg-white rounded-2xl border border-[#DCE3EC] p-4 space-y-3">
+      <div class="text-xs font-black text-slate-800">特別廣播觸發模式</div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-black">
+        <button data-sp-kind="after_stop" class="min-h-[42px] px-3 py-2 rounded-xl border ${tabBtnCls('after_stop')}">車站後特別廣播</button>
+        <button data-sp-kind="location" class="min-h-[42px] px-3 py-2 rounded-xl border ${tabBtnCls('location')}">指定地點特別廣播</button>
+        <button data-sp-kind="random_all" class="min-h-[42px] px-3 py-2 rounded-xl border ${tabBtnCls('random_all')}">全線隨機 (每5分鐘)</button>
+      </div>
+      <input id="spNoteInput" type="text" value="${esc(sp.note || '')}" placeholder="備註（選填，例如：緊握扶手、隧道安全提示、轉乘優惠）" class="w-full min-h-[40px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-semibold" />
+    </div>
+
+    ${sp.kind === 'after_stop' ? afterStopCard : (sp.kind === 'location' ? locationCard : randomCard)}
+  `;
+
+  footer.classList.remove('hidden');
+  footer.innerHTML = `
+    <button id="btnRemoveSpecial" class="min-h-[44px] px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-[#D0302F] text-xs font-black">移除特別廣播</button>
+    <button id="btnSaveSpecialNext" class="min-h-[44px] px-5 py-2 rounded-xl bg-[#0B875B] hover:bg-[#096E4A] text-white text-xs font-black flex-1 sm:flex-none">儲存並跳下一個</button>
+  `;
+
+  bindPlayerEvents(selectedSpecialPath);
+
+  // 切換類型與備註
+  body.querySelectorAll('[data-sp-kind]').forEach(b => {
+    b.onclick = () => {
+      sp.kind = b.dataset.spKind;
+      if (sp.kind === 'random_all') sp.intervalMin = 5;
+      commitSp(true);
+    };
+  });
+  document.getElementById('spNoteInput').onchange = (e) => { sp.note = e.target.value.trim(); commitSp(false); };
+
+  // 車站後特別廣播互動
+  if (sp.kind === 'after_stop') {
+    body.querySelectorAll('[data-sp-rm-stop]').forEach(b => {
+      b.onclick = () => { sp.stopIds = sp.stopIds.filter(x => x !== b.dataset.spRmStop); commitSp(true); };
+    });
+    const stInp = document.getElementById('spStopSearch');
+    const stRes = document.getElementById('spStopResults');
+    if (stInp && stRes) {
+      stInp.oninput = () => {
+        const q = stInp.value.trim().toLowerCase();
+        if (!q) { stRes.classList.add('hidden'); return; }
+        const hits = allStops.filter(st =>
+          st.nameTc.toLowerCase().includes(q) || st.subTc.toLowerCase().includes(q) ||
+          st.nameEn.toLowerCase().includes(q) || st.numId.includes(q) || st.routes.some(r => r.toLowerCase().includes(q))
+        ).slice(0, 25);
+        stRes.classList.remove('hidden');
+        stRes.innerHTML = hits.length ? hits.map(st => {
+          const on = sp.stopIds.includes(st.stopId);
+          const hInfo = getStopHandledInfo(st.stopId, coverageMap);
+          return `<button type="button" data-sp-add-stop="${esc(st.stopId)}" class="w-full min-h-[44px] px-3 py-2 text-left hover:bg-blue-50 flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="text-xs font-black text-slate-900 flex items-center gap-1.5 flex-wrap">
+                ${hInfo.handled ? `<span class="px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-[#0B875B] text-[10px] font-black">${esc(hInfo.badgeText)}</span>` : ''}
+                <span class="truncate">${esc(formatStopFullTc(st))} <span class="text-[#0052CC]">#${esc(st.numId)}</span></span>
+              </div>
+              <div class="text-[11px] text-slate-500 truncate">${esc(st.routes.slice(0, 8).join(' / '))}</div>
+            </div>
+            <span class="px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 ${on ? 'bg-emerald-100 text-emerald-800' : 'bg-[#0052CC] text-white'}">${on ? '已選' : '加入'}</span>
+          </button>`;
+        }).join('') : `<div class="p-3 text-center text-xs text-slate-400">找不到符合的車站</div>`;
+        stRes.querySelectorAll('[data-sp-add-stop]').forEach(b => {
+          b.onclick = () => {
+            if (!sp.stopIds.includes(b.dataset.spAddStop)) sp.stopIds.push(b.dataset.spAddStop);
+            commitSp(true);
+          };
+        });
+      };
+    }
+
+    body.querySelectorAll('[data-sp-rmode]').forEach(b => {
+      b.onclick = () => { sp.routeMode = b.dataset.spRmode; commitSp(true); };
+    });
+    body.querySelectorAll('[data-sp-rm-route]').forEach(b => {
+      b.onclick = () => { sp.routes = sp.routes.filter(x => x !== b.dataset.spRmRoute); commitSp(true); };
+    });
+    const rInp = document.getElementById('spRouteSearch');
+    const rPick = document.getElementById('spRoutePicker');
+    if (rInp && rPick) {
+      const renderRPick = () => {
+        const q = rInp.value.trim().toLowerCase();
+        const pool = boundStops.length
+          ? Array.from(new Set(boundStops.flatMap(st => st.routes))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+          : allRouteIds;
+        const hits = (q ? allRouteIds : pool).filter(r => !q || r.toLowerCase().includes(q)).slice(0, 60);
+        rPick.innerHTML = hits.map(r => {
+          const on = sp.routes.includes(r);
+          return `<button type="button" data-sp-tog-r="${esc(r)}" class="px-2.5 py-1 rounded-lg text-xs font-black border ${on ? (sp.routeMode === 'exclude' ? 'bg-[#D0302F] text-white border-[#D0302F]' : 'bg-[#0052CC] text-white border-[#0052CC]') : 'bg-white text-slate-700 border-slate-300'}">${esc(r)}</button>`;
+        }).join('') || `<span class="text-xs text-slate-400">找不到路線</span>`;
+        rPick.querySelectorAll('[data-sp-tog-r]').forEach(b => {
+          b.onclick = () => {
+            const r = b.dataset.spTogR;
+            if (sp.routes.includes(r)) sp.routes = sp.routes.filter(x => x !== r);
+            else sp.routes.push(r);
+            commitSp(true);
+          };
+        });
+      };
+      renderRPick();
+      rInp.oninput = renderRPick;
+    }
+
+    body.querySelectorAll('[data-sp-tmode]').forEach(b => {
+      b.onclick = () => { sp.tripMode = b.dataset.spTmode; commitSp(true); };
+    });
+    body.querySelectorAll('[data-sp-rm-trip]').forEach(b => {
+      b.onclick = () => { sp.tripNames = sp.tripNames.filter(x => x !== b.dataset.spRmTrip); commitSp(true); };
+    });
+    const tInp = document.getElementById('spTripSearch');
+    const tPick = document.getElementById('spTripPicker');
+    if (tInp && tPick) {
+      const renderTPick = () => {
+        const q = tInp.value.trim().toLowerCase();
+        const hits = allTrips.filter(t => !q || `${t.routeId} ${t.name} ${t.tripLabel}`.toLowerCase().includes(q)).slice(0, 35);
+        tPick.innerHTML = hits.map(t => {
+          const on = sp.tripNames.includes(t.name);
+          return `<button type="button" data-sp-tog-t="${esc(t.name)}" class="w-full px-3 py-2 text-left text-xs font-bold flex items-center justify-between ${on ? 'bg-indigo-50 text-indigo-900' : 'hover:bg-slate-50'}">
+            <span class="truncate">${esc(t.name)}${t.tripLabel ? ` (${esc(t.tripLabel)})` : ''}</span>
+            <span class="text-[11px] font-black shrink-0">${on ? '✓ 已選' : '＋'}</span>
+          </button>`;
+        }).join('') || `<div class="p-3 text-center text-xs text-slate-400">找不到班次</div>`;
+        tPick.querySelectorAll('[data-sp-tog-t]').forEach(b => {
+          b.onclick = () => {
+            const tn = b.dataset.spTogT;
+            if (sp.tripNames.includes(tn)) sp.tripNames = sp.tripNames.filter(x => x !== tn);
+            else sp.tripNames.push(tn);
+            commitSp(true);
+          };
+        });
+      };
+      renderTPick();
+      tInp.oninput = renderTPick;
+    }
+  }
+
+  // 指定地點特別廣播互動
+  if (sp.kind === 'location') {
+    const locPick = document.getElementById('spLocStopPick');
+    const locRes = document.getElementById('spLocStopRes');
+    if (locPick && locRes) {
+      locPick.oninput = () => {
+        const q = locPick.value.trim().toLowerCase();
+        if (!q) { locRes.classList.add('hidden'); return; }
+        const hits = allStops.filter(st =>
+          st.lat != null && st.lng != null &&
+          (st.nameTc.toLowerCase().includes(q) || st.subTc.toLowerCase().includes(q) || st.nameEn.toLowerCase().includes(q) || st.numId.includes(q))
+        ).slice(0, 20);
+        locRes.classList.remove('hidden');
+        locRes.innerHTML = hits.length ? hits.map(st => `
+          <button type="button" data-sp-loc-st="${esc(st.stopId)}" class="w-full px-3 py-2 text-left hover:bg-amber-50 flex items-center justify-between gap-2 text-xs">
+            <div class="min-w-0">
+              <div class="font-black text-slate-900 truncate">${esc(formatStopFullTc(st))} #${esc(st.numId)}</div>
+              <div class="text-[10px] text-slate-500">${Number(st.lat).toFixed(5)}, ${Number(st.lng).toFixed(5)}</div>
+            </div>
+            <span class="px-2 py-1 rounded-lg bg-amber-500 text-white font-black shrink-0">代入</span>
+          </button>
+        `).join('') : `<div class="p-3 text-center text-xs text-slate-400">找不到含座標的車站</div>`;
+        locRes.querySelectorAll('[data-sp-loc-st]').forEach(b => {
+          b.onclick = () => {
+            const st = stopById.get(b.dataset.spLocSt);
+            if (!st) return;
+            sp.locationName = formatStopFullTc(st);
+            sp.lat = Number(st.lat);
+            sp.lng = Number(st.lng);
+            commitSp(true);
+            showToast(`已代入地點座標：${sp.locationName}`);
+          };
+        });
+      };
+    }
+
+    const locName = document.getElementById('spLocName');
+    const latInp = document.getElementById('spLatInp');
+    const lngInp = document.getElementById('spLngInp');
+    const radInp = document.getElementById('spRadInp');
+    const pasteInp = document.getElementById('spCoordPaste');
+    if (locName) locName.onchange = () => { sp.locationName = locName.value.trim(); commitSp(false); };
+    if (latInp) latInp.onchange = () => { const v = Number(latInp.value); sp.lat = Number.isFinite(v) ? v : null; commitSp(false); };
+    if (lngInp) lngInp.onchange = () => { const v = Number(lngInp.value); sp.lng = Number.isFinite(v) ? v : null; commitSp(false); };
+    if (radInp) radInp.onchange = () => { const v = Number(radInp.value); sp.radiusM = (Number.isFinite(v) && v >= 15) ? Math.round(v) : 80; commitSp(false); };
+    if (pasteInp) {
+      pasteInp.oninput = () => {
+        const m = pasteInp.value.match(/(-?\d+(?:\.\d+)?)\s*[,，\s]+\s*(-?\d+(?:\.\d+)?)/);
+        if (m) {
+          const la = Number(m[1]), ln = Number(m[2]);
+          if (Number.isFinite(la) && Number.isFinite(ln)) {
+            sp.lat = la; sp.lng = ln;
+            if (latInp) latInp.value = String(la);
+            if (lngInp) lngInp.value = String(ln);
+            pasteInp.value = '';
+            commitSp(false);
+            showToast(`已自動填入座標：${la.toFixed(5)}, ${ln.toFixed(5)}`);
+          }
+        }
+      };
+    }
+  }
+
+  // 不適用路線選擇器（location 與 random_all 共用）
+  if (sp.kind === 'location' || sp.kind === 'random_all') {
+    body.querySelectorAll('[data-sp-rm-exroute]').forEach(b => {
+      b.onclick = () => { sp.excludeRoutes = sp.excludeRoutes.filter(x => x !== b.dataset.spRmExroute); commitSp(true); };
+    });
+    const exInp = document.getElementById('spExRouteSearch');
+    const exPick = document.getElementById('spExRoutePicker');
+    if (exInp && exPick) {
+      const renderExPick = () => {
+        const q = exInp.value.trim().toLowerCase();
+        const hits = allRouteIds.filter(r => !q || r.toLowerCase().includes(q)).slice(0, 60);
+        exPick.innerHTML = hits.map(r => {
+          const on = sp.excludeRoutes.includes(r);
+          return `<button type="button" data-sp-tog-ex="${esc(r)}" class="px-2.5 py-1 rounded-lg text-xs font-black border ${on ? 'bg-[#D0302F] text-white border-[#D0302F]' : 'bg-white text-slate-700 border-slate-300'}">${esc(r)}</button>`;
+        }).join('') || `<span class="text-xs text-slate-400">找不到路線</span>`;
+        exPick.querySelectorAll('[data-sp-tog-ex]').forEach(b => {
+          b.onclick = () => {
+            const r = b.dataset.spTogEx;
+            if (sp.excludeRoutes.includes(r)) sp.excludeRoutes = sp.excludeRoutes.filter(x => x !== r);
+            else sp.excludeRoutes.push(r);
+            commitSp(true);
+          };
+        });
+      };
+      renderExPick();
+      exInp.oninput = renderExPick;
+    }
+  }
+
+  // 底部按鈕
+  document.getElementById('btnRemoveSpecial').onclick = () => {
+    const p = selectedSpecialPath;
+    if (!confirm('確定要移除此特別廣播設定（音檔會退回未配對清單）？')) return;
+    delete studioDb.specialBroadcasts[p];
+    syncAtomicRecord('specialBroadcasts', p, null);
+    selectedSpecialPath = '';
+    showToast('已移除特別廣播設定');
+    renderMainList();
+    closeMobileInspector();
+  };
+  document.getElementById('btnSaveSpecialNext').onclick = () => {
+    commitSp(false);
+    showToast('已儲存特別廣播設定');
+    moveToSiblingAudio(1);
+  };
 }
 
 function restoreSingleIgnoredAudio(path, openAfterMode) {
@@ -2642,6 +3324,7 @@ function selectTripForInspector(tripKey) {
   selectedWelcomePath = '';
   selectedMissingStopId = '';
   selectedIgnoredPath = '';
+  selectedSpecialPath = '';
   pushPresence();
   renderMainList();
   renderTripInspector();
@@ -3676,7 +4359,30 @@ function buildExportPayload() {
     });
   }
 
-  const tripNames = {};
+  const specialBroadcasts = [];
+  for (const [audioPath, s] of Object.entries(studioDb.specialBroadcasts || {})) {
+    if (!s || studioDb.ignored[audioPath]) continue;
+    specialBroadcasts.push({
+      audioPath,
+      kind: s.kind || 'after_stop',
+      stopIds: Array.isArray(s.stopIds) ? s.stopIds : [],
+      routeMode: s.routeMode || 'all',
+      routes: Array.isArray(s.routes) ? s.routes : [],
+      tripMode: s.tripMode || 'all',
+      tripNames: Array.isArray(s.tripNames) ? s.tripNames : [],
+      locationName: s.locationName || '',
+      lat: (s.lat != null && Number.isFinite(Number(s.lat))) ? Number(s.lat) : null,
+      lng: (s.lng != null && Number.isFinite(Number(s.lng))) ? Number(s.lng) : null,
+      radiusM: Number(s.radiusM) > 0 ? Number(s.radiusM) : 80,
+      excludeRoutes: Array.isArray(s.excludeRoutes) ? s.excludeRoutes : [],
+      intervalMin: Number(s.intervalMin) > 0 ? Number(s.intervalMin) : 5,
+      note: s.note || '',
+      updatedAt: s.updatedAt || new Date().toISOString(),
+      updatedBy: s.updatedBy || ''
+    });
+  }
+
+    const tripNames = {};
   for (const [k, c] of Object.entries(studioDb.customTrips || {})) {
     if (!c) continue;
     const base = tripCatalog.get(k);
@@ -3705,7 +4411,7 @@ function buildExportPayload() {
   return {
     version: 5,
     updatedAt: new Date().toISOString(),
-    confirmed, details, rules, defaultWelcome, welcomeRules,
+    confirmed, details, rules, defaultWelcome, welcomeRules, specialBroadcasts,
     tripNames
   };
 }
@@ -3720,7 +4426,7 @@ function downloadJson(obj, filename) {
 
 async function publishToWebRepo() {
   const payload = buildExportPayload();
-  if (!payload.rules.length && !payload.welcomeRules.length && !Object.keys(payload.tripNames || {}).length) {
+  if (!payload.rules.length && !payload.welcomeRules.length && !(payload.specialBroadcasts || []).length && !Object.keys(payload.tripNames || {}).length) {
     showToast('目前未有已處理音檔或歡迎詞可發佈');
     return;
   }
@@ -3920,6 +4626,7 @@ async function loadRemoteData() {
   else if (selectedWelcomePath) renderWelcomeInspector();
   else if (selectedTripKey) renderTripInspector();
   else if (selectedIgnoredPath) renderIgnoredInspector();
+  else if (selectedSpecialPath) renderSpecialInspector();
 }
 
 function syncNavAndPillsUi() {
@@ -4115,6 +4822,7 @@ function boot() {
         studioDb = {
           rules: parsed.rules || {},
           welcomeRules: parsed.welcomeRules || {},
+        specialBroadcasts: parsed.specialBroadcasts || {},
           ignored: parsed.ignored || {},
           customTrips: parsed.customTrips || {}
         };
