@@ -611,6 +611,18 @@ function roomBaseUrl() {
   return fb ? `${fb}/ctb_studio_rooms/${getRoomId()}` : '';
 }
 
+async function pullFullRoomNow(silent = true) {
+  const base = roomBaseUrl();
+  if (!base) return;
+  try {
+    const res = await fetch(`${base}.json?t=${Date.now()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && typeof data === 'object') applyRoomRootSnapshot(data);
+    updateSyncStatus(`??????${getRoomId()}`, 'live');
+  } catch (_) {}
+}
+
 async function syncAtomicRecord(collection, key, valueOrNull) {
   saveLocalDb();
   const base = roomBaseUrl();
@@ -643,11 +655,12 @@ async function uploadFullLocalDbToRoomIfEmpty() {
         ? (typeof v === 'object' ? v : { audioPath: k })
         : (col === 'customTrips' ? { ...v, tripKey: k } : { ...v, audioPath: k });
     }
-    await fetch(`${base}/${col}.json`, {
+    const r = await fetch(`${base}/${col}.json`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patchObj)
-    }).catch(() => {});
+    }).catch(() => null);
+    if (r && r.ok) updateSyncStatus(`??????${getRoomId()}`, 'live');
   }
 }
 
