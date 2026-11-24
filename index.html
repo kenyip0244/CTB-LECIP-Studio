@@ -974,7 +974,7 @@ function applyRoomRootSnapshot(data) {
   renderMainList();
   if (selectedAudioPath && document.activeElement?.tagName !== 'INPUT') renderAudioInspector();
   else if (selectedWelcomePath && document.activeElement?.tagName !== 'INPUT') renderWelcomeInspector();
-  else if (selectedTripKey && document.activeElement?.tagName !== 'INPUT') renderTripInspector();
+  else if (selectedTripKey && !tripEditMode && document.activeElement?.tagName !== 'INPUT') renderTripInspector();
   else if (selectedIgnoredPath && document.activeElement?.tagName !== 'INPUT') renderIgnoredInspector();
   else if (selectedSpecialPath && document.activeElement?.tagName !== 'INPUT') renderSpecialInspector();
 }
@@ -3399,6 +3399,52 @@ async function lookupOfficialCtbApiStop(stopIdRaw) {
   }
 }
 
+async function fetchOfficialCtbApiRouteStops(routeNo, direction) {
+  const cleanRoute = String(routeNo || '').trim().toUpperCase();
+  const dir = direction === 'inbound' ? 'inbound' : 'outbound';
+  if (!cleanRoute) return { ok: false, error: '請輸入路線編號' };
+
+  try {
+    const res = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/route-stop/CTB/${encodeURIComponent(cleanRoute)}/${dir}`);
+    if (!res.ok) return { ok: false, error: `城巴 API 回應錯誤 (HTTP ${res.status})` };
+    const json = await res.json();
+    const list = Array.isArray(json?.data) ? json.data : [];
+    if (!list.length) return { ok: false, error: `城巴官方 API 找不到 ${cleanRoute}（${dir === 'inbound' ? '回程' : '去程'}）站序` };
+
+    list.sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0));
+
+    // 分批向官方 API 補齊本地 stops.json 未收錄的車站資料
+    const stopIds = list.map(x => String(x.stop || '').trim()).filter(Boolean);
+    const resolvedMap = new Map();
+    const batchSize = 6;
+    for (let i = 0; i < stopIds.length; i += batchSize) {
+      const chunk = stopIds.slice(i, i + batchSize);
+      const fetched = await Promise.all(chunk.map(id => lookupOfficialCtbApiStop(id)));
+      chunk.forEach((id, idx) => {
+        if (fetched[idx]) resolvedMap.set(id, fetched[idx]);
+      });
+    }
+
+    const stops = [];
+    for (let i = 0; i < list.length; i++) {
+      const rawStop = String(list[i].stop || '').trim();
+      const st = resolvedMap.get(rawStop);
+      const sid = st ? st.stopId : (rawStop.replace(/^0+/, '') || rawStop);
+      const entry = { seq: i + 1, stopId: sid, sectionFare: null, section: 1 };
+      if (st && (!st.routes || st.routes.length === 0)) {
+        entry.apiStopMeta = {
+          stopId: st.stopId, numId: st.numId, nameTc: st.nameTc, subTc: st.subTc || '',
+          nameEn: st.nameEn || '', nameSc: st.nameSc || '', lat: st.lat ?? null, lng: st.lng ?? null
+        };
+      }
+      stops.push(entry);
+    }
+    return { ok: true, stops, route: cleanRoute, dir };
+  } catch (err) {
+    return { ok: false, error: err?.message || '網路連線失敗' };
+  }
+}
+
 function openTripCreateModal() {
   const modal = document.getElementById('tripCreateModal');
   if (!modal) return;
@@ -3724,6 +3770,19 @@ function renderTripInspector() {
             <div id="tripAddApiStopResults" class="hidden max-h-48 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl"></div>
           </div>
 
+          <!-- A2. 從城巴官方 API 搵路線並匯入全線車站 -->
+          <div class="rounded-xl bg-emerald-50/80 border border-emerald-200 p-3 space-y-2">
+            <div class="text-xs font-black text-emerald-950">從城巴官方 API 搜尋路線並匯入全線車站</div>
+            <div class="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+              <input id="tripApiRouteInp" type="text" value="${esc(trip.routeId || '')}" placeholder="路線編號（如 A26、102）" class="flex-1 min-w-[110px] min-h-[38px] px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-xs font-black uppercase" />
+              <select id="tripApiRouteDir" class="min-h-[38px] px-2.5 py-1.5 rounded-xl bg-white border border-emerald-300 text-xs font-bold">
+                <option value="outbound" ${trip.bound !== 'I' ? 'selected' : ''}>去程 (O)</option>
+                <option value="inbound" ${trip.bound === 'I' ? 'selected' : ''}>回程 (I)</option>
+              </select>
+              <button type="button" id="btnImportOfficialApiRoute" class="min-h-[38px] px-3 py-1.5 rounded-xl bg-[#0B875B] hover:bg-[#096E4A] text-white text-xs font-black shrink-0">API 匯入路線</button>
+            </div>
+          </div>
+
           <!-- B. 從現有班次匯入車站與收費 -->
           <div class="rounded-xl bg-amber-50/70 border border-amber-200 p-3 space-y-2">
             <div class="flex items-center justify-between gap-2">
@@ -3987,6 +4046,35 @@ function renderTripInspector() {
     if (!st) { showToast('官方城巴 API 找不到此站號，無法加入非 API 車站'); return; }
     insertApiStop(st);
   };
+
+  // 從城巴官方 API 匯入整條路線車站
+  const btnApiRoute = document.getElementById('btnImportOfficialApiRoute');
+  if (btnApiRoute) {
+    btnApiRoute.onclick = async () => {
+      const rVal = (document.getElementById('tripApiRouteInp')?.value || '').trim().toUpperCase();
+      const dVal = document.getElementById('tripApiRouteDir')?.value || 'outbound';
+      if (!rVal) { showToast('請先輸入路線編號'); return; }
+      if (draftStops.length && !confirm(`確定要用城巴 API 嘅「${rVal}（${dVal === 'inbound' ? '回程' : '去程'}）」車站覆蓋目前 ${draftStops.length} 個車站？`)) return;
+
+      const origText = btnApiRoute.textContent;
+      btnApiRoute.disabled = true;
+      btnApiRoute.textContent = '匯入中...';
+      showToast(`正在向城巴官方 API 讀取 ${rVal} 車站...`);
+
+      const res = await fetchOfficialCtbApiRouteStops(rVal, dVal);
+      btnApiRoute.disabled = false;
+      btnApiRoute.textContent = origText;
+
+      if (!res.ok) {
+        showToast(res.error || '無法從城巴 API 讀取路線');
+        return;
+      }
+      draftStops = recalcStopSections(res.stops);
+      stopsModified = true;
+      showToast(`已從城巴 API 匯入 ${res.route} 共 ${draftStops.length} 個車站（記得按儲存）`);
+      renderStopsRows();
+    };
+  }
 
   // 從現有班次重新匯入車站與收費
   const reimpInp = document.getElementById('tripReimportSearch');
