@@ -557,7 +557,7 @@ function getFbUrl() {
   return HARDCODED_FB_URL;
 }
 function getRoomId() { return (localStorage.getItem(KEY_CFG_ROOM) || 'main').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'main'; }
-function getMyName() { return (localStorage.getItem(KEY_CFG_NAME) || '').trim() || '??-' + CLIENT_ID.slice(2, 6); }
+function getMyName() { return (localStorage.getItem(KEY_CFG_NAME) || '').trim() || '成員-' + CLIENT_ID.slice(2, 6); }
 function isAutoPlayOn() { return localStorage.getItem(KEY_CFG_AUTOPLAY) === '1'; }
 
 function cleanJoint(raw) {
@@ -629,6 +629,32 @@ function roomBaseUrl() {
   return fb ? `${fb}/ctb_studio_rooms/${getRoomId()}` : '';
 }
 
+function normalizeRuleRec(v) {
+  return {
+    audioPath: v.audioPath,
+    stopIds: Array.isArray(v.stopIds) ? v.stopIds : [],
+    routeMode: v.routeMode || 'all',
+    routes: Array.isArray(v.routes) ? v.routes : [],
+    tripMode: v.tripMode || 'all',
+    tripNames: Array.isArray(v.tripNames) ? v.tripNames : [],
+    note: v.note || '',
+    updatedAt: v.updatedAt || '',
+    updatedBy: v.updatedBy || ''
+  };
+}
+
+function normalizeWelcomeRec(v) {
+  return {
+    audioPath: v.audioPath,
+    scope: v.scope || 'default',
+    routes: Array.isArray(v.routes) ? v.routes : [],
+    tripNames: Array.isArray(v.tripNames) ? v.tripNames : [],
+    note: v.note || '',
+    updatedAt: v.updatedAt || '',
+    updatedBy: v.updatedBy || ''
+  };
+}
+
 async function syncAtomicRecord(collection, key, valueOrNull) {
   saveLocalDb();
   const base = roomBaseUrl();
@@ -643,14 +669,14 @@ async function syncAtomicRecord(collection, key, valueOrNull) {
           body: JSON.stringify(valueOrNull)
         });
     if (!res.ok) {
-      updateSyncStatus(`???? (HTTP ${res.status})`, 'warn');
-      showToast(`???????HTTP ${res.status}`);
+      updateSyncStatus(`寫入失敗 (HTTP ${res.status})`, 'warn');
+      showToast(`雲端同步失敗：HTTP ${res.status}`);
       return;
     }
-    updateSyncStatus(`??????${getRoomId()}`, 'live');
+    updateSyncStatus(`已連線房間：${getRoomId()}`, 'live');
   } catch (err) {
-    updateSyncStatus(`?????${err.message || '????'}`, 'warn');
-    showToast('??????????????? Brave ??');
+    updateSyncStatus(`連線錯誤：${err.message || '網路異常'}`, 'warn');
+    showToast('雲端同步失敗，請檢查網路連線');
   }
 }
 
@@ -673,15 +699,15 @@ async function uploadFullLocalDbToRoom() {
         body: JSON.stringify(patchObj)
       });
       if (!res.ok) {
-        updateSyncStatus(`???? (HTTP ${res.status})`, 'warn');
-        showToast(`?????????HTTP ${res.status}`);
+        updateSyncStatus(`上傳失敗 (HTTP ${res.status})`, 'warn');
+        showToast(`本機進度上傳失敗：HTTP ${res.status}`);
         return false;
       }
     }
     initialPushDone = true;
     return true;
   } catch (err) {
-    updateSyncStatus(`?????${err.message || '????'}`, 'warn');
+    updateSyncStatus(`上傳異常：${err.message || '網路被擋'}`, 'warn');
     return false;
   }
 }
@@ -692,18 +718,18 @@ async function pullFullRoomNow(silent = true) {
   try {
     const res = await fetch(`${base}.json?t=${Date.now()}`);
     if (!res.ok) {
-      updateSyncStatus(`???? (HTTP ${res.status})`, 'warn');
-      if (!silent) showToast(`???????HTTP ${res.status}`);
+      updateSyncStatus(`讀取失敗 (HTTP ${res.status})`, 'warn');
+      if (!silent) showToast(`雲端讀取失敗：HTTP ${res.status}`);
       return;
     }
     const data = await res.json();
     if (data && typeof data === 'object') {
       applyRoomRootSnapshot(data);
     }
-    updateSyncStatus(`??????${getRoomId()}`, 'live');
+    updateSyncStatus(`已連線房間：${getRoomId()}`, 'live');
   } catch (err) {
-    updateSyncStatus(`?????${err.message || '????'}`, 'warn');
-    if (!silent) showToast(`???? Firebase?${err.message || '?????'}`);
+    updateSyncStatus(`連線中斷：${err.message || '網路異常'}`, 'warn');
+    if (!silent) showToast(`無法連線 Firebase：${err.message || '請檢查網路'}`);
   }
 }
 
@@ -720,7 +746,7 @@ async function pushPresence() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(me)
     });
-    if (res.ok) updateSyncStatus(`??????${getRoomId()}`, 'live');
+    if (res.ok) updateSyncStatus(`已連線房間：${getRoomId()}`, 'live');
   } catch (_) {}
 }
 
@@ -753,8 +779,8 @@ function renderPresenceUi() {
   const chips = peers.map(p => `
     <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/80 xl:w-full text-slate-200 text-[11px] font-bold">
       <span class="w-2 h-2 rounded-full shrink-0" style="background:${esc(p.color || '#0B875B')}"></span>
-      <span class="truncate">${esc(p.name)}${p.isMe ? '???' : ''}</span>
-      ${p.activeItem && !p.isMe ? `<span class="ml-auto text-[10px] text-amber-300 shrink-0">???</span>` : ''}
+      <span class="truncate">${esc(p.name)}${p.isMe ? '（你）' : ''}</span>
+      ${p.activeItem && !p.isMe ? `<span class="ml-auto text-[10px] text-amber-300 shrink-0">編輯中</span>` : ''}
     </div>
   `).join('');
   if (rail) rail.innerHTML = chips;
@@ -762,7 +788,7 @@ function renderPresenceUi() {
     modal.innerHTML = peers.map(p => `
       <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-800 text-[11px] font-bold">
         <span class="w-2 h-2 rounded-full" style="background:${esc(p.color || '#0B875B')}"></span>
-        ${esc(p.name)}${p.isMe ? '???' : ''}
+        ${esc(p.name)}${p.isMe ? '（你）' : ''}
       </span>
     `).join('');
   }
@@ -776,12 +802,30 @@ function updateSyncStatus(text, level) {
     dot.className = `w-2 h-2 rounded-full shrink-0 ${level === 'live' ? 'bg-emerald-400 animate-pulse' : level === 'warn' ? 'bg-amber-400' : 'bg-slate-400'}`;
   }
   if (mState) mState.textContent = text;
-  if (lbl) lbl.textContent = level === 'live' ? '???' : '????';
+  if (lbl) lbl.textContent = level === 'live' ? '協作中' : '邀請朋友';
 }
 
 function applyRoomRootSnapshot(data) {
   if (!data || typeof data !== 'object') return;
-  const extractByKey = (obj, keyField) => {
+  const extractRules = (obj) => {
+    const out = {};
+    if (obj && typeof obj === 'object') {
+      for (const v of Object.values(obj)) {
+        if (v && v.audioPath) out[v.audioPath] = normalizeRuleRec(v);
+      }
+    }
+    return out;
+  };
+  const extractWel = (obj) => {
+    const out = {};
+    if (obj && typeof obj === 'object') {
+      for (const v of Object.values(obj)) {
+        if (v && v.audioPath) out[v.audioPath] = normalizeWelcomeRec(v);
+      }
+    }
+    return out;
+  };
+  const extractSimple = (obj, keyField) => {
     const out = {};
     if (obj && typeof obj === 'object') {
       for (const v of Object.values(obj)) {
@@ -791,10 +835,10 @@ function applyRoomRootSnapshot(data) {
     return out;
   };
 
-  const remoteRules = extractByKey(data.rules, 'audioPath');
-  const remoteWel = extractByKey(data.welcomeRules, 'audioPath');
-  const remoteIgn = extractByKey(data.ignored, 'audioPath');
-  const remoteTrips = extractByKey(data.customTrips, 'tripKey');
+  const remoteRules = extractRules(data.rules);
+  const remoteWel = extractWel(data.welcomeRules);
+  const remoteIgn = extractSimple(data.ignored, 'audioPath');
+  const remoteTrips = extractSimple(data.customTrips, 'tripKey');
 
   if (initialPushDone) {
     studioDb.rules = remoteRules;
@@ -825,7 +869,7 @@ function startRealtimeCollab() {
 
   const base = roomBaseUrl();
   if (!base) {
-    updateSyncStatus('????', 'idle');
+    updateSyncStatus('單機模式', 'idle');
     renderPresenceUi();
     return;
   }
@@ -1249,11 +1293,11 @@ function renderMainList() {
     container.innerHTML = items.length ? items.map(path => {
       const fn = path.split('/').pop();
       const w = studioDb.welcomeRules[path];
-      let badge = `<span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-bold">未設定範圍</span>`;
+      const tNames = Array.isArray(w?.tripNames) ? w.tripNames : [];
+      let badge = `<span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-bold">未設定方向班次</span>`;
       if (w) {
-        if (w.scope === 'default') badge = `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">全線預設歡迎詞</span>`;
-        else if (w.scope === 'routes') badge = `<span class="px-2 py-0.5 rounded-md bg-blue-50 text-[#0052CC] text-[11px] font-bold">路線：${esc(w.routes.join(', ') || '未選')}</span>`;
-        else if (w.scope === 'trips') badge = `<span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">班次：${esc(w.tripNames.join(', ') || '未選')}</span>`;
+        if (w.scope === 'default') badge = `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">全線通用預設</span>`;
+        else badge = `<span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">單一方向：${esc(tNames.join(', ') || '未選方向班次')}</span>`;
       }
       return `
         <div data-select-welcome="${esc(path)}" data-selected="${selectedWelcomePath === path}" class="work-row px-3.5 py-3 cursor-pointer flex items-center justify-between gap-2.5 min-h-[60px]">
@@ -1551,7 +1595,6 @@ function renderAudioInspector() {
 
   const relevantRoutes = rule.routeMode === 'specific' && rule.routes.length ? new Set(rule.routes) : suggestedRoutesSet;
   const allTrips = getAllTripEntries();
-  const suggestedTrips = relevantRoutes.size ? allTrips.filter(t => relevantRoutes.has(t.routeId)) : allTrips.slice(0, 30);
 
   titleEl.textContent = fn;
   subEl.textContent = rule.updatedBy ? `${selectedAudioPath}・最後由 ${rule.updatedBy} 更新` : selectedAudioPath;
@@ -1617,13 +1660,13 @@ function renderAudioInspector() {
         ${rule.routeMode === 'specific' ? `
           <div class="space-y-2.5">
             <div class="flex flex-wrap gap-1.5">
-              ${rule.routes.map(r => `<span class="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg bg-[#0052CC] text-white text-xs font-bold">${esc(r)}<button data-del-route="${esc(r)}" class="ml-0.5 hover:text-amber-300">×</button></span>`).join('') || `<span class="text-xs text-slate-400">點選下方途經路線或手動輸入</span>`}
+              ${rule.routes.map(r => `<span class="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg bg-[#0052CC] text-white text-xs font-bold">${esc(r)}<button data-del-route="${esc(r)}" class="ml-0.5 hover:text-amber-300">×</button></span>`).join('') || `<span class="text-xs text-slate-400">搜尋路線編號或直接點選下方路線</span>`}
             </div>
-            ${suggestedRoutes.length ? `<div class="flex flex-wrap gap-1.5">${suggestedRoutes.slice(0, 24).map(r => `<button data-toggle-route="${esc(r)}" class="min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-bold border ${rule.routes.includes(r) ? 'bg-blue-50 border-blue-400 text-[#0052CC]' : 'bg-slate-50 border-slate-200 text-slate-700'}">${esc(r)}</button>`).join('')}</div>` : ''}
             <div class="flex gap-2">
-              <input id="manualRouteInput" type="text" placeholder="輸入路線（如 796X、A21）" class="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold uppercase" />
+              <input id="manualRouteInput" type="text" placeholder="搜尋或輸入路線（如 102、796X、A21）..." class="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold uppercase focus:bg-white focus:border-[#0052CC]" />
               <button id="btnAddManualRoute" class="min-h-[42px] px-4 rounded-xl bg-[#0B1622] text-white text-xs font-bold">加入</button>
             </div>
+            <div id="inspRoutePickList" class="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200"></div>
           </div>
         ` : ''}
       </div>
@@ -1640,13 +1683,13 @@ function renderAudioInspector() {
         ${rule.tripMode === 'specific' ? `
           <div class="space-y-2.5">
             <div class="flex flex-wrap gap-1.5">
-              ${rule.tripNames.map(tn => `<span class="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold">${esc(tn)}<button data-del-tripname="${esc(tn)}" class="ml-0.5 hover:text-red-700">×</button></span>`).join('') || `<span class="text-xs text-slate-400">點選下方班次或手動輸入</span>`}
+              ${rule.tripNames.map(tn => `<span class="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold">${esc(tn)}<button data-del-tripname="${esc(tn)}" class="ml-0.5 hover:text-red-700">×</button></span>`).join('') || `<span class="text-xs text-slate-400">搜尋路線或總站點選班次</span>`}
             </div>
-            ${suggestedTrips.length ? `<div class="max-h-32 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200">${suggestedTrips.slice(0, 40).map(t => `<button data-toggle-tripname="${esc(t.name)}" class="min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-bold border ${rule.tripNames.includes(t.name) ? 'bg-amber-200 border-amber-500 text-slate-900' : 'bg-white border-slate-200 text-slate-700'}">${esc(t.name)}</button>`).join('')}</div>` : ''}
             <div class="flex gap-2">
-              <input id="manualTripInput" type="text" placeholder="輸入班次名稱（如 182-愉翠苑-1）" class="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold" />
+              <input id="manualTripInput" type="text" placeholder="搜尋或輸入班次（如 102、美孚、愉翠苑）..." class="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold focus:bg-white focus:border-[#0052CC]" />
               <button id="btnAddManualTrip" class="min-h-[42px] px-4 rounded-xl bg-[#0B1622] text-white text-xs font-bold">加入</button>
             </div>
+            <div id="inspTripPickList" class="max-h-40 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200"></div>
           </div>
         ` : ''}
       </div>
@@ -1738,36 +1781,60 @@ function renderAudioInspector() {
   };
 
   body.querySelectorAll('[data-rmode]').forEach(b => b.onclick = () => { rule.routeMode = b.dataset.rmode; commitRule(); renderMainList(); renderAudioInspector(); });
-  body.querySelectorAll('[data-toggle-route]').forEach(b => b.onclick = () => {
-    const r = b.dataset.toggleRoute;
-    rule.routes = rule.routes.includes(r) ? rule.routes.filter(x => x !== r) : [...rule.routes, r];
-    commitRule(); renderMainList(); renderAudioInspector();
-  });
   body.querySelectorAll('[data-del-route]').forEach(b => b.onclick = () => {
     rule.routes = rule.routes.filter(x => x !== b.dataset.delRoute);
     commitRule(); renderMainList(); renderAudioInspector();
   });
-  const btnManualR = document.getElementById('btnAddManualRoute');
-  if (btnManualR) btnManualR.onclick = () => {
-    const val = (document.getElementById('manualRouteInput').value || '').trim().toUpperCase();
-    if (val && !rule.routes.includes(val)) { rule.routes.push(val); commitRule(); renderMainList(); renderAudioInspector(); }
-  };
+
+  if (rule.routeMode === 'specific') {
+    const rInp = document.getElementById('manualRouteInput');
+    const rBox = document.getElementById('inspRoutePickList');
+    const renderRouteChips = (kw) => {
+      const q = String(kw || '').trim().toUpperCase();
+      const pool = q ? allRouteIds.filter(r => r.includes(q)) : (suggestedRoutes.length ? suggestedRoutes : allRouteIds);
+      const list = pool.slice(0, 80);
+      rBox.innerHTML = list.length ? list.map(r => `<button data-toggle-route="${esc(r)}" class="min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-bold border ${rule.routes.includes(r) ? 'bg-blue-50 border-blue-400 text-[#0052CC]' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'}">${esc(r)}</button>`).join('') : `<div class="text-xs text-slate-400 p-2">找不到路線「${esc(q)}」</div>`;
+      rBox.querySelectorAll('[data-toggle-route]').forEach(b => b.onclick = () => {
+        const r = b.dataset.toggleRoute;
+        rule.routes = rule.routes.includes(r) ? rule.routes.filter(x => x !== r) : [...rule.routes, r];
+        commitRule(); renderMainList(); renderAudioInspector();
+      });
+    };
+    rInp.oninput = () => renderRouteChips(rInp.value);
+    renderRouteChips('');
+    document.getElementById('btnAddManualRoute').onclick = () => {
+      const val = (rInp.value || '').trim().toUpperCase();
+      if (val && !rule.routes.includes(val)) { rule.routes.push(val); commitRule(); renderMainList(); renderAudioInspector(); }
+    };
+  }
 
   body.querySelectorAll('[data-tmode]').forEach(b => b.onclick = () => { rule.tripMode = b.dataset.tmode; commitRule(); renderMainList(); renderAudioInspector(); });
-  body.querySelectorAll('[data-toggle-tripname]').forEach(b => b.onclick = () => {
-    const tn = b.dataset.toggleTripname;
-    rule.tripNames = rule.tripNames.includes(tn) ? rule.tripNames.filter(x => x !== tn) : [...rule.tripNames, tn];
-    commitRule(); renderMainList(); renderAudioInspector();
-  });
   body.querySelectorAll('[data-del-tripname]').forEach(b => b.onclick = () => {
     rule.tripNames = rule.tripNames.filter(x => x !== b.dataset.delTripname);
     commitRule(); renderMainList(); renderAudioInspector();
   });
-  const btnManualT = document.getElementById('btnAddManualTrip');
-  if (btnManualT) btnManualT.onclick = () => {
-    const val = (document.getElementById('manualTripInput').value || '').trim();
-    if (val && !rule.tripNames.includes(val)) { rule.tripNames.push(val); commitRule(); renderMainList(); renderAudioInspector(); }
-  };
+
+  if (rule.tripMode === 'specific') {
+    const tInp = document.getElementById('manualTripInput');
+    const tBox = document.getElementById('inspTripPickList');
+    const renderTripChips = (kw) => {
+      const q = String(kw || '').trim().toLowerCase();
+      const basePool = q ? allTrips : (relevantRoutes.size ? allTrips.filter(t => relevantRoutes.has(t.routeId)) : allTrips);
+      const list = basePool.filter(t => !q || `${t.routeId} ${t.name}`.toLowerCase().includes(q)).slice(0, 80);
+      tBox.innerHTML = list.length ? list.map(t => `<button data-toggle-tripname="${esc(t.name)}" class="min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-bold border text-left ${rule.tripNames.includes(t.name) ? 'bg-amber-200 border-amber-500 text-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'}">${esc(t.name)}</button>`).join('') : `<div class="text-xs text-slate-400 p-2">找不到符合的班次</div>`;
+      tBox.querySelectorAll('[data-toggle-tripname]').forEach(b => b.onclick = () => {
+        const tn = b.dataset.toggleTripname;
+        rule.tripNames = rule.tripNames.includes(tn) ? rule.tripNames.filter(x => x !== tn) : [...rule.tripNames, tn];
+        commitRule(); renderMainList(); renderAudioInspector();
+      });
+    };
+    tInp.oninput = () => renderTripChips(tInp.value);
+    renderTripChips('');
+    document.getElementById('btnAddManualTrip').onclick = () => {
+      const val = (tInp.value || '').trim();
+      if (val && !rule.tripNames.includes(val)) { rule.tripNames.push(val); commitRule(); renderMainList(); renderAudioInspector(); }
+    };
+  }
 
   document.getElementById('inspNoteInput').onchange = (e) => { rule.note = e.target.value.trim(); commitRule(); };
 
@@ -1815,7 +1882,6 @@ function renderAudioInspector() {
       showToast('已儲存並同步');
     }
     renderMainList();
-    // If on unmatched tab and current item moved out, pick same index; else advance by 1
     const stillHere = currentFilteredPaths.indexOf(curPath);
     let nextPath = '';
     if (stillHere === -1 && currentFilteredPaths.length) {
@@ -1847,55 +1913,49 @@ function renderWelcomeInspector() {
   const qNav = document.getElementById('inspectorQuickNav');
   if (!selectedWelcomePath || !body) return;
 
+  const fn = selectedWelcomePath.split('/').pop();
   const w = ensureWelcomeRule(selectedWelcomePath);
   const trips = getAllTripEntries();
-  titleEl.textContent = selectedWelcomePath.split('/').pop();
-  subEl.textContent = `歡迎詞規則・${selectedWelcomePath}`;
+
+  // 從舊路線設定或檔名開頭自動推測篩選關鍵字（例如 102_BUS.mp3 -> 102）
+  const fnRouteMatch = fn.match(/^([A-Z]{0,2}\d{1,3}[A-Z]?)(?:[_\-\s\.]|$)/i);
+  const defaultSearch = (w.scope === 'routes' && w.routes.length) ? w.routes[0] : (fnRouteMatch ? fnRouteMatch[1].toUpperCase() : '');
+  if (w.scope === 'routes') {
+    w.scope = 'trips';
+    w.routes = [];
+  }
+
+  titleEl.textContent = fn;
+  subEl.textContent = `歡迎詞規則（單一方向）・${selectedWelcomePath}`;
   qNav.classList.remove('hidden');
 
   body.innerHTML = `
     ${renderPlayerHtml(selectedWelcomePath)}
     <div class="bg-white rounded-2xl border border-[#DCE3EC] p-4 space-y-3.5">
-      <h3 class="text-sm font-black text-slate-900">歡迎詞套用範圍</h3>
-      <div class="grid grid-cols-3 gap-2 text-xs font-bold">
-        <button data-wscope="default" class="min-h-[42px] rounded-xl border ${w.scope === 'default' ? 'bg-[#0B1622] text-white border-[#0B1622]' : 'bg-slate-50 text-slate-700 border-slate-200'}">全線預設</button>
-        <button data-wscope="routes" class="min-h-[42px] rounded-xl border ${w.scope === 'routes' ? 'bg-[#0052CC] text-white border-[#0052CC]' : 'bg-slate-50 text-slate-700 border-slate-200'}">指定路線</button>
-        <button data-wscope="trips" class="min-h-[42px] rounded-xl border ${w.scope === 'trips' ? 'bg-[#0052CC] text-white border-[#0052CC]' : 'bg-slate-50 text-slate-700 border-slate-200'}">指定班次</button>
+      <h3 class="text-sm font-black text-slate-900">歡迎詞套用範圍（單一方向）</h3>
+      <div class="grid grid-cols-2 gap-2 text-xs font-bold">
+        <button data-wscope="default" class="min-h-[42px] rounded-xl border ${w.scope === 'default' ? 'bg-[#0B1622] text-white border-[#0B1622]' : 'bg-slate-50 text-slate-700 border-slate-200'}">全線通用預設</button>
+        <button data-wscope="trips" class="min-h-[42px] rounded-xl border ${w.scope !== 'default' ? 'bg-[#0052CC] text-white border-[#0052CC]' : 'bg-slate-50 text-slate-700 border-slate-200'}">指定單一方向班次</button>
       </div>
 
-      ${w.scope === 'default' ? `<p class="text-xs text-slate-500">所有未指定專屬歡迎詞嘅城巴路線都會播放呢條歡迎詞。</p>` : ''}
-
-      ${w.scope === 'routes' ? `
+      ${w.scope === 'default' ? `<p class="text-xs text-slate-500">所有未指定專屬方向歡迎詞嘅班次都會播放呢條歡迎詞。</p>` : `
         <div class="space-y-2.5">
           <div class="flex flex-wrap gap-1.5">
-            ${w.routes.map(r => `<span class="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg bg-[#0052CC] text-white text-xs font-bold">${esc(r)}<button data-wdel-r="${esc(r)}">×</button></span>`).join('') || `<span class="text-xs text-slate-400">請輸入或點選路線</span>`}
+            ${w.tripNames.map(tn => `<span class="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold">${esc(tn)}<button data-wdel-t="${esc(tn)}" class="ml-0.5 hover:text-red-700">×</button></span>`).join('') || `<span class="text-xs text-slate-400">請搜尋路線或總站，點選對應嘅單一方向班次</span>`}
           </div>
           <div class="flex gap-2">
-            <input id="wRouteInput" type="text" placeholder="路線編號（如 A21、H1、796X）" class="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold uppercase" />
-            <button id="btnWAddRoute" class="min-h-[42px] px-4 rounded-xl bg-[#0B1622] text-white text-xs font-bold">加入</button>
+            <input id="wTripSearchInput" type="text" value="${esc(defaultSearch)}" placeholder="搜尋路線編號或總站（例如 102、美孚、機場）..." class="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-white border border-slate-300 text-sm font-bold focus:border-[#0052CC]" />
+            <button id="btnWClearSearch" class="min-h-[42px] px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">清除</button>
           </div>
-          <div class="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200">
-            ${allRouteIds.slice(0, 90).map(r => `<button data-wtog-r="${esc(r)}" class="min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-bold border ${w.routes.includes(r) ? 'bg-blue-100 border-blue-400 text-[#0052CC]' : 'bg-white border-slate-200 text-slate-700'}">${esc(r)}</button>`).join('')}
-          </div>
-        </div>
-      ` : ''}
-
-      ${w.scope === 'trips' ? `
-        <div class="space-y-2.5">
-          <div class="flex flex-wrap gap-1.5">
-            ${w.tripNames.map(tn => `<span class="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold">${esc(tn)}<button data-wdel-t="${esc(tn)}">×</button></span>`).join('') || `<span class="text-xs text-slate-400">請輸入或點選班次名稱</span>`}
-          </div>
-          <div class="flex gap-2">
-            <input id="wTripInput" type="text" placeholder="班次名稱（如 A21-機場-1）" class="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold" />
-            <button id="btnWAddTrip" class="min-h-[42px] px-4 rounded-xl bg-[#0B1622] text-white text-xs font-bold">加入</button>
-          </div>
-          <div class="max-h-40 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200">
-            ${trips.slice(0, 60).map(t => `<button data-wtog-t="${esc(t.name)}" class="min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-bold border ${w.tripNames.includes(t.name) ? 'bg-amber-200 border-amber-500 text-slate-900' : 'bg-white border-slate-200 text-slate-700'}">${esc(t.name)}</button>`).join('')}
+          <div id="wTripPickList" class="max-h-52 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200"></div>
+          <div class="flex gap-2 pt-1">
+            <input id="wTripInput" type="text" placeholder="或手動輸入班次名稱（如 102-美孚-1）" class="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-300 text-xs font-bold" />
+            <button id="btnWAddTrip" class="min-h-[40px] px-4 rounded-xl bg-[#0B1622] text-white text-xs font-bold">加入</button>
           </div>
         </div>
-      ` : ''}
+      `}
 
-      <input id="wNoteInput" type="text" value="${esc(w.note || '')}" placeholder="備註（例如：機場快線 2026 新版）" class="w-full min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold" />
+      <input id="wNoteInput" type="text" value="${esc(w.note || '')}" placeholder="備註（例如：102 往美孚方向歡迎詞）" class="w-full min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold" />
     </div>
   `;
 
@@ -1908,30 +1968,43 @@ function renderWelcomeInspector() {
   bindPlayerEvents(selectedWelcomePath);
 
   const commitWel = () => {
+    w.routes = [];
     w.updatedAt = new Date().toISOString();
     w.updatedBy = getMyName();
     syncAtomicRecord('welcomeRules', selectedWelcomePath, w);
   };
 
-  body.querySelectorAll('[data-wscope]').forEach(b => b.onclick = () => { w.scope = b.dataset.wscope; commitWel(); renderMainList(); renderWelcomeInspector(); });
-  body.querySelectorAll('[data-wtog-r]').forEach(b => b.onclick = () => {
-    const r = b.dataset.wtogR;
-    w.routes = w.routes.includes(r) ? w.routes.filter(x => x !== r) : [...w.routes, r];
+  body.querySelectorAll('[data-wscope]').forEach(b => b.onclick = () => {
+    w.scope = b.dataset.wscope;
     commitWel(); renderMainList(); renderWelcomeInspector();
   });
-  body.querySelectorAll('[data-wdel-r]').forEach(b => b.onclick = () => { w.routes = w.routes.filter(x => x !== b.dataset.wdelR); commitWel(); renderMainList(); renderWelcomeInspector(); });
-  const btnWR = document.getElementById('btnWAddRoute');
-  if (btnWR) btnWR.onclick = () => {
-    const val = (document.getElementById('wRouteInput').value || '').trim().toUpperCase();
-    if (val && !w.routes.includes(val)) { w.routes.push(val); commitWel(); renderMainList(); renderWelcomeInspector(); }
-  };
 
-  body.querySelectorAll('[data-wtog-t]').forEach(b => b.onclick = () => {
-    const tn = b.dataset.wtogT;
-    w.tripNames = w.tripNames.includes(tn) ? w.tripNames.filter(x => x !== tn) : [...w.tripNames, tn];
+  if (w.scope !== 'default') {
+    const sInp = document.getElementById('wTripSearchInput');
+    const pickBox = document.getElementById('wTripPickList');
+    const renderPickList = (kw) => {
+      const q = String(kw || '').trim().toLowerCase();
+      const matched = trips.filter(t => !q || `${t.routeId} ${t.name}`.toLowerCase().includes(q)).slice(0, 100);
+      pickBox.innerHTML = matched.length ? matched.map(t => {
+        const on = w.tripNames.includes(t.name);
+        return `<button data-wtog-t="${esc(t.name)}" class="min-h-[36px] px-2.5 py-1 rounded-lg text-xs font-bold border text-left ${on ? 'bg-amber-200 border-amber-500 text-slate-900' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'}">${esc(t.name)}</button>`;
+      }).join('') : `<div class="p-3 text-xs text-slate-400">找不到符合「${esc(q)}」的單一方向班次</div>`;
+
+      pickBox.querySelectorAll('[data-wtog-t]').forEach(b => b.onclick = () => {
+        const tn = b.dataset.wtogT;
+        w.tripNames = w.tripNames.includes(tn) ? w.tripNames.filter(x => x !== tn) : [...w.tripNames, tn];
+        commitWel(); renderMainList(); renderWelcomeInspector();
+      });
+    };
+    sInp.oninput = () => renderPickList(sInp.value);
+    document.getElementById('btnWClearSearch').onclick = () => { sInp.value = ''; renderPickList(''); sInp.focus(); };
+    renderPickList(sInp.value);
+  }
+
+  body.querySelectorAll('[data-wdel-t]').forEach(b => b.onclick = () => {
+    w.tripNames = w.tripNames.filter(x => x !== b.dataset.wdelT);
     commitWel(); renderMainList(); renderWelcomeInspector();
   });
-  body.querySelectorAll('[data-wdel-t]').forEach(b => b.onclick = () => { w.tripNames = w.tripNames.filter(x => x !== b.dataset.wdelT); commitWel(); renderMainList(); renderWelcomeInspector(); });
   const btnWT = document.getElementById('btnWAddTrip');
   if (btnWT) btnWT.onclick = () => {
     const val = (document.getElementById('wTripInput').value || '').trim();
@@ -1948,7 +2021,7 @@ function renderWelcomeInspector() {
   };
   document.getElementById('btnWSave').onclick = () => {
     w.note = (document.getElementById('wNoteInput').value || '').trim();
-    commitWel(); showToast('已儲存歡迎詞並同步'); renderMainList(); closeMobileInspector();
+    commitWel(); showToast('已儲存單一方向歡迎詞並同步'); renderMainList(); closeMobileInspector();
   };
 }
 
@@ -2247,8 +2320,8 @@ function buildExportPayload() {
     if (studioDb.ignored[audioPath]) continue;
     if (w.scope === 'default' && !defaultWelcome) defaultWelcome = audioPath;
     welcomeRules.push({
-      audioPath, scope: w.scope || 'default',
-      routes: w.routes || [], tripNames: w.tripNames || [],
+      audioPath, scope: w.scope === 'default' ? 'default' : 'trips',
+      routes: [], tripNames: w.tripNames || [],
       note: w.note || '', updatedAt: w.updatedAt || new Date().toISOString(),
       updatedBy: w.updatedBy || ''
     });
@@ -2591,7 +2664,7 @@ function initEvents() {
     await loadRemoteData();
     const ok = await uploadFullLocalDbToRoom();
     await pullFullRoomNow(false);
-    if (ok) showToast(`????????? ${Object.keys(studioDb.rules).length} ????`);
+    if (ok) showToast(`已同步最新進度（共 ${Object.keys(studioDb.rules).length} 條規則）`);
   };
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
