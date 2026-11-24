@@ -586,6 +586,14 @@ function cleanJoint(raw) {
   return s;
 }
 
+function formatStopFullTc(st) {
+  if (!st) return '';
+  const main = String(st.nameTc || st.stopId || '').trim();
+  const sub = String(st.subTc || '').trim();
+  if (!sub || main.includes(sub)) return main;
+  return `${main}, ${sub}`;
+}
+
 function normText(s) {
   return String(s || '').toLowerCase().replace(/[\(（][^\)）]*[\)）]/g, '').replace(/[\s,，\.。\-－·・、'"`]/g, '');
 }
@@ -1277,7 +1285,7 @@ function renderMainList() {
       const peer = getPeerEditingItem(path);
       const stopBadges = (r?.stopIds || []).slice(0, 3).map(sid => {
         const st = stopById.get(sid);
-        return `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">${esc(st ? st.nameTc : sid)}</span>`;
+        return `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">${esc(st ? formatStopFullTc(st) : sid)}</span>`;
       }).join('');
       const moreStops = (r?.stopIds?.length || 0) > 3 ? `<span class="text-[11px] font-bold text-slate-500">+${r.stopIds.length - 3}</span>` : '';
       const routeTag = r && r.routeMode === 'specific' && r.routes.length
@@ -1399,7 +1407,7 @@ function renderMainList() {
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1.5">
                   <span class="text-[11px] font-black text-slate-400 w-5">${item.seq}.</span>
-                  <span class="text-[13px] font-black text-slate-900 truncate">${esc(item.st?.nameTc || item.stopId)}</span>
+                  <span class="text-[13px] font-black text-slate-900 truncate">${esc(formatStopFullTc(item.st) || item.stopId)}</span>
                 </div>
                 <div class="pl-6 mt-0.5 flex flex-wrap gap-1">
                   ${item.isCovered
@@ -1438,7 +1446,7 @@ function renderMainList() {
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-[#D0302F] shrink-0"></span>
-            <span class="text-[13px] font-black text-slate-900 truncate">${esc(st.nameTc)}</span>
+            <span class="text-[13px] font-black text-slate-900 truncate">${esc(formatStopFullTc(st))}</span>
             <span class="text-[11px] text-slate-400">#${esc(st.numId)}</span>
           </div>
           <div class="text-[11px] text-slate-500 truncate mt-0.5">${esc(st.routes.slice(0, 8).join(' / ') || '無途經路線')}</div>
@@ -1740,7 +1748,7 @@ function renderAudioInspector() {
       <div class="flex flex-wrap gap-2">
         ${boundStops.length ? boundStops.map(st => `
           <span class="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold">
-            <span>${esc(st.nameTc)} <span class="text-[11px] text-emerald-700">#${esc(st.numId)}</span></span>
+            <span>${esc(st.nameTc)}${st.subTc ? `<span class="text-emerald-700 font-semibold">, ${esc(st.subTc)}</span>` : ''} <span class="text-[11px] text-emerald-700">#${esc(st.numId)}</span></span>
             <button data-remove-stop="${esc(st.stopId)}" class="w-5 h-5 rounded-full hover:bg-emerald-200 text-emerald-800 font-black flex items-center justify-center">×</button>
           </span>
         `).join('') : `<span class="text-xs text-slate-400 font-semibold">尚未綁定任何車站</span>`}
@@ -1758,7 +1766,7 @@ function renderAudioInspector() {
           <div class="flex flex-wrap gap-1.5">
             ${smartSuggestions.map(st => `
               <button data-quick-add-stop="${esc(st.stopId)}" class="min-h-[36px] px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold">
-                ＋ ${esc(st.nameTc)} #${esc(st.numId)}
+                ＋ ${esc(formatStopFullTc(st))} #${esc(st.numId)}
               </button>
             `).join('')}
           </div>
@@ -1888,7 +1896,7 @@ function renderAudioInspector() {
       const already = rule.stopIds.includes(st.stopId);
       return `<button data-add-stop="${esc(st.stopId)}" class="w-full min-h-[48px] px-3.5 py-2 text-left hover:bg-blue-50 flex items-center justify-between gap-2">
         <div class="min-w-0">
-          <div class="text-xs font-black text-slate-900 truncate">${esc(st.nameTc)} ${st.subTc ? `<span class="text-slate-500 font-semibold">[${esc(st.subTc)}]</span>` : ''} <span class="text-[#0052CC]">#${esc(st.numId)}</span></div>
+          <div class="text-xs font-black text-slate-900 truncate">${esc(st.nameTc)}${st.subTc ? `<span class="text-slate-500 font-semibold">, ${esc(st.subTc)}</span>` : ''} <span class="text-[#0052CC]">#${esc(st.numId)}</span></div>
           <div class="text-[11px] text-slate-500 truncate">${esc(st.routes.slice(0, 8).join(' / '))}</div>
         </div>
         <span class="px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 ${already ? 'bg-emerald-100 text-emerald-800' : 'bg-[#0052CC] text-white'}">${already ? '已選' : '加入'}</span>
@@ -2174,7 +2182,7 @@ function renderMissingStopInspector(stopId, contextTrip) {
   footer.classList.add('hidden');
   if (!st || !body) return;
 
-  titleEl.textContent = `指派音檔：${st.nameTc}`;
+  titleEl.textContent = `指派音檔：${formatStopFullTc(st)}`;
   subEl.textContent = `#${st.numId} ${st.nameEn}${contextTrip ? `・${contextTrip.name}` : ''}`;
 
   const renderCandidates = (kw, onlyUnmatched) => {
@@ -2225,7 +2233,7 @@ function renderMissingStopInspector(stopId, contextTrip) {
   body.innerHTML = `
     ${contextTrip ? `<button id="btnReturnToTripDetail" class="w-full min-h-[40px] px-3.5 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-200 text-slate-800 text-xs font-black text-left">← 返回「${esc(contextTrip.name)}」班次車站列表</button>` : ''}
     <div class="bg-white rounded-2xl border border-[#DCE3EC] p-4 space-y-2">
-      <div class="text-sm font-black text-slate-900">${esc(st.nameTc)} ${st.subTc ? `<span class="text-slate-500 font-bold text-xs">[${esc(st.subTc)}]</span>` : ''}</div>
+      <div class="text-sm font-black text-slate-900">${esc(st.nameTc)}${st.subTc ? `<span class="text-slate-500 font-bold text-xs">, ${esc(st.subTc)}</span>` : ''}</div>
       <div class="text-xs text-slate-500">途經路線：${esc(st.routes.join(' / ') || '無')}</div>
       ${contextTrip ? `<label class="flex items-center gap-2 pt-1 text-xs font-bold text-slate-700 cursor-pointer"><input id="chkLimitContextTrip" type="checkbox" class="w-4 h-4 accent-[#0052CC]" />只套用於目前班次「${esc(contextTrip.name)}」</label>` : ''}
     </div>
@@ -2235,7 +2243,7 @@ function renderMissingStopInspector(stopId, contextTrip) {
         <h3 class="text-sm font-black text-slate-900">挑選已上傳音檔</h3>
         <label class="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer"><input id="chkOnlyUnmatched" type="checkbox" checked class="w-4 h-4 accent-[#0052CC]" />只看未配對</label>
       </div>
-      <input id="missingAudioSearch" type="text" value="${esc(st.nameTc)}" placeholder="搜尋音檔檔名或站號..." class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold" />
+      <input id="missingAudioSearch" type="text" value="${esc(formatStopFullTc(st))}" placeholder="搜尋音檔檔名或站號..." class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold" />
       <div id="missingAudioCandidates" class="max-h-[420px] overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl"></div>
     </div>
   `;
@@ -2536,7 +2544,7 @@ function renderTripInspector() {
           <div class="flex items-center gap-1.5 flex-wrap">
             <span class="text-xs font-black text-slate-400 w-6 shrink-0">${item.seq}.</span>
             <span class="text-[13px] font-black text-slate-900">${esc(item.st?.nameTc || item.stopId)}</span>
-            ${item.st?.subTc ? `<span class="text-[11px] font-semibold text-slate-500">[${esc(item.st.subTc)}]</span>` : ''}
+            ${item.st?.subTc ? `<span class="text-[11px] font-semibold text-slate-500">, ${esc(item.st.subTc)}</span>` : ''}
             <span class="text-[11px] font-bold text-slate-400">#${esc(item.st?.numId || item.stopId)}</span>
           </div>
           ${item.st?.nameEn ? `<div class="pl-7 text-[11px] text-slate-500 truncate">${esc(item.st.nameEn)}</div>` : ''}
