@@ -1199,6 +1199,13 @@ function getTripTypeBadgeHtml(t) {
   return badges.join('');
 }
 
+function getStopRulePriorityScore(rule) {
+  if (!rule) return 0;
+  const rSpecific = rule.routeMode === 'specific' && Array.isArray(rule.routes) && rule.routes.length > 0;
+  const tSpecific = rule.tripMode === 'specific' && Array.isArray(rule.tripNames) && rule.tripNames.length > 0;
+  return (tSpecific ? 4 : 0) + (rSpecific ? 2 : 0) + 1;
+}
+
 function buildStopCoverageIndex() {
   const map = new Map();
   for (const [audioPath, rule] of Object.entries(studioDb.rules)) {
@@ -1212,13 +1219,50 @@ function buildStopCoverageIndex() {
   return map;
 }
 
+function getStopHandledInfo(stopId, coverageMap, excludeAudioPath = '') {
+  const list = (coverageMap.get(stopId) || []).filter(x => !excludeAudioPath || x.audioPath !== excludeAudioPath);
+  if (!list.length) return { handled: false, count: 0, hasAll: false, specificRoutes: [], hasSpecificTrip: false, badgeText: '' };
+  let hasAll = false;
+  let hasSpecificTrip = false;
+  const rSet = new Set();
+  for (const { rule } of list) {
+    const rSpec = rule.routeMode === 'specific' && Array.isArray(rule.routes) && rule.routes.length > 0;
+    const tSpec = rule.tripMode === 'specific' && Array.isArray(rule.tripNames) && rule.tripNames.length > 0;
+    if (tSpec) hasSpecificTrip = true;
+    if (rSpec) rule.routes.forEach(r => rSet.add(String(r).trim().toUpperCase()));
+    if (!rSpec && !tSpec) hasAll = true;
+  }
+  const specificRoutes = Array.from(rSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const parts = [];
+  if (hasAll) parts.push('全線');
+  if (specificRoutes.length) {
+    parts.push(specificRoutes.slice(0, 3).join('/') + (specificRoutes.length > 3 ? `+${specificRoutes.length - 3}` : ''));
+  } else if (hasSpecificTrip) {
+    parts.push('指定班次');
+  }
+  const badgeText = parts.length ? `√ ${parts.join('·')}` : '√';
+  return { handled: true, count: list.length, hasAll, specificRoutes, hasSpecificTrip, badgeText };
+}
+
 function getMatchingRulesForStopOnTrip(stopId, routeId, tripName, coverageMap) {
   const list = coverageMap.get(stopId) || [];
-  return list.filter(({ rule }) => {
-    const routeOk = rule.routeMode !== 'specific' || (Array.isArray(rule.routes) && rule.routes.includes(routeId));
-    const tripOk = rule.tripMode !== 'specific' || (Array.isArray(rule.tripNames) && rule.tripNames.includes(tripName));
+  const rUp = String(routeId || '').trim().toUpperCase();
+  const tTrim = String(tripName || '').trim();
+  const matched = list.filter(({ rule }) => {
+    const rSpec = rule.routeMode === 'specific';
+    const tSpec = rule.tripMode === 'specific';
+    const routeOk = !rSpec || (Array.isArray(rule.routes) && rule.routes.map(x => String(x).trim().toUpperCase()).includes(rUp));
+    const tripOk = !tSpec || (Array.isArray(rule.tripNames) && rule.tripNames.map(x => String(x).trim()).includes(tTrim));
     return routeOk && tripOk;
   });
+  matched.sort((a, b) => {
+    const scoreDiff = getStopRulePriorityScore(b.rule) - getStopRulePriorityScore(a.rule);
+    if (scoreDiff !== 0) return scoreDiff;
+    const ta = Date.parse(a.rule?.updatedAt || '') || 0;
+    const tb = Date.parse(b.rule?.updatedAt || '') || 0;
+    return tb - ta;
+  });
+  return matched;
 }
 
 function getSmartSuggestedStops(audioPath) {
@@ -1913,6 +1957,7 @@ function renderAudioInspector() {
   const fn = selectedAudioPath.split('/').pop();
   const rule = ensureRule(selectedAudioPath);
   const peer = getPeerEditingItem(selectedAudioPath);
+  const coverageMap = buildStopCoverageIndex();
   const boundStops = rule.stopIds.map(sid => stopById.get(sid) || { stopId: sid, numId: sid, nameTc: sid, nameEn: '', routes: [] });
   const smartSuggestions = getSmartSuggestedStops(selectedAudioPath).filter(s => !rule.stopIds.includes(s.stopId));
 
@@ -1922,6 +1967,14 @@ function renderAudioInspector() {
 
   const relevantRoutes = rule.routeMode === 'specific' && rule.routes.length ? new Set(rule.routes) : suggestedRoutesSet;
   const allTrips = getAllTripEntries();
+  const protectedRouteSet = new Set();
+  if (rule.routeMode !== 'specific' && rule.tripMode !== 'specific') {
+    for (const sid of rule.stopIds) {
+      const otherInfo = getStopHandledInfo(sid, coverageMap, selectedAudioPath);
+      otherInfo.specificRoutes.forEach(r => protectedRouteSet.add(r));
+    }
+  }
+  const protectedSpecificRoutes = Array.from(protectedRouteSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   titleEl.textContent = fn;
   subEl.textContent = rule.updatedBy ? `${selectedAudioPath}・最後由 ${rule.updatedBy} 更新` : selectedAudioPath;
@@ -1958,11 +2011,13 @@ function renderAudioInspector() {
         <div class="pt-1 space-y-1.5">
           <div class="text-[11px] font-bold text-slate-500">根據檔名自動建議（點一下即綁定）：</div>
           <div class="flex flex-wrap gap-1.5">
-            ${smartSuggestions.map(st => `
-              <button data-quick-add-stop="${esc(st.stopId)}" class="min-h-[36px] px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold">
-                ＋ ${esc(formatStopFullTc(st))} #${esc(st.numId)}
-              </button>
-            `).join('')}
+            ${smartSuggestions.map(st => {
+              const hInfo = getStopHandledInfo(st.stopId, coverageMap);
+              return `<button data-quick-add-stop="${esc(st.stopId)}" class="min-h-[36px] px-3 py-1.5 rounded-xl ${hInfo.handled ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-950' : 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-950'} border text-xs font-bold inline-flex items-center gap-1">
+                ${hInfo.handled ? `<span class="px-1 py-0.2 rounded bg-emerald-200/80 text-[#0B875B] text-[10px] font-black">${esc(hInfo.badgeText)}</span>` : ''}
+                <span>＋ ${esc(formatStopFullTc(st))} #${esc(st.numId)}</span>
+              </button>`;
+            }).join('')}
           </div>
         </div>
       ` : ''}
@@ -1995,7 +2050,11 @@ function renderAudioInspector() {
             </div>
             <div id="inspRoutePickList" class="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200"></div>
           </div>
-        ` : ''}
+        ` : (protectedSpecificRoutes.length ? `
+          <div class="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-[11px] font-bold">
+            優先規則保護：所選車站已設有專屬路線廣播（${esc(protectedSpecificRoutes.join('、'))}），這些路線仍會優先播放其專屬音檔，其餘路線則播放本音檔。
+          </div>
+        ` : '')}
       </div>
 
       <!-- Trip Names -->
@@ -2088,9 +2147,13 @@ function renderAudioInspector() {
     stopRes.classList.remove('hidden');
     stopRes.innerHTML = hits.length ? hits.map(st => {
       const already = rule.stopIds.includes(st.stopId);
+      const hInfo = getStopHandledInfo(st.stopId, coverageMap);
       return `<button data-add-stop="${esc(st.stopId)}" class="w-full min-h-[48px] px-3.5 py-2 text-left hover:bg-blue-50 flex items-center justify-between gap-2">
         <div class="min-w-0">
-          <div class="text-xs font-black text-slate-900 truncate">${esc(st.nameTc)}${st.subTc ? `<span class="text-slate-500 font-semibold">, ${esc(st.subTc)}</span>` : ''} <span class="text-[#0052CC]">#${esc(st.numId)}</span></div>
+          <div class="text-xs font-black text-slate-900 flex items-center gap-1.5 flex-wrap">
+            ${hInfo.handled ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-[#0B875B] text-[10px] font-black shrink-0">${esc(hInfo.badgeText)}</span>` : ''}
+            <span class="truncate">${esc(st.nameTc)}${st.subTc ? `<span class="text-slate-500 font-semibold">, ${esc(st.subTc)}</span>` : ''} <span class="text-[#0052CC]">#${esc(st.numId)}</span></span>
+          </div>
           <div class="text-[11px] text-slate-500 truncate">${esc(st.routes.slice(0, 8).join(' / '))}</div>
         </div>
         <span class="px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 ${already ? 'bg-emerald-100 text-emerald-800' : 'bg-[#0052CC] text-white'}">${already ? '已選' : '加入'}</span>
@@ -3215,7 +3278,10 @@ function renderTripInspector() {
     addStopRes.innerHTML = hits.length ? hits.map(st => `
       <button type="button" data-pick-api-stop="${esc(st.stopId)}" class="w-full min-h-[46px] px-3 py-2 text-left hover:bg-blue-50 flex items-center justify-between gap-2">
         <div class="min-w-0">
-          <div class="text-xs font-black text-slate-900 truncate">${esc(formatStopFullTc(st))} <span class="text-[#0052CC]">#${esc(st.numId)}</span></div>
+          <div class="text-xs font-black text-slate-900 flex items-center gap-1.5 flex-wrap">
+            ${getStopHandledInfo(st.stopId, coverageMap).handled ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 border border-emerald-300 text-[#0B875B] text-[10px] font-black shrink-0">${esc(getStopHandledInfo(st.stopId, coverageMap).badgeText)}</span>` : ''}
+            <span class="truncate">${esc(formatStopFullTc(st))} <span class="text-[#0052CC]">#${esc(st.numId)}</span></span>
+          </div>
           <div class="text-[11px] text-slate-500 truncate">${esc(st.nameEn || '')}${st.routes?.length ? `・${esc(st.routes.slice(0, 6).join('/'))}` : ''}</div>
         </div>
         <span class="px-2.5 py-1 rounded-lg bg-[#0052CC] text-white text-xs font-bold shrink-0">加入</span>
