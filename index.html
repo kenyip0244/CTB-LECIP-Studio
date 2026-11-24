@@ -539,20 +539,22 @@ function showToast(msg) {
 function getAudioBase() { return (localStorage.getItem(KEY_CFG_AUDIO) || DEFAULT_AUDIO_BASE).trim().replace(/\/+$/, ''); }
 function getWebDataBase() { return (localStorage.getItem(KEY_CFG_WEBDATA) || DEFAULT_WEB_DATA_BASE).trim().replace(/\/+$/, ''); }
 function getGhToken() { return (localStorage.getItem(KEY_CFG_GH) || '').trim(); }
-function getFbUrl() { return (localStorage.getItem(KEY_CFG_FB) || 'https://ctb-lecip-studio-default-rtdb.asia-southeast1.firebasedatabase.app').trim().replace(/\/+$/, ''); }
-function getRoomId() { return (localStorage.getItem(KEY_CFG_ROOM) || 'main').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'main'; }
-function getMyName() { return (localStorage.getItem(KEY_CFG_NAME) || '').trim() || '成員-' + CLIENT_ID.slice(2, 6); }
-function isAutoPlayOn() { return localStorage.getItem(KEY_CFG_AUTOPLAY) === '1'; }
-
-function cleanJoint(raw) {
-  const s = String(raw || '').trim();
-  if (!s || !s.includes('/')) return s;
-  const parts = s.split(/\s*\/\s*/).map(p => p.trim()).filter(Boolean);
-  if (parts.length !== 2) return s;
-  const [p1, p2] = parts;
-  if (/^(G|UG|LG|M|B\d?|\d+)$/i.test(p1) && /^F$/i.test(p2)) return s;
-  if (/\/\s+/.test(s) || (p1 === p1.toUpperCase() && p2 !== p2.toUpperCase())) return p2;
-  return s;
+const HARDCODED_FB_URL = 'https://ctb-lecip-studio-default-rtdb.asia-southeast1.firebasedatabase.app';
+function getFbUrl() {
+  const saved = (localStorage.getItem(KEY_CFG_FB) || '').trim();
+  if (!saved) return HARDCODED_FB_URL;
+  try {
+    const u = new URL(saved);
+    if (u.hostname === 'ctb-lecip-studio-default-rtdb.firebaseio.com' || u.hostname.includes('console.firebase')) {
+      localStorage.setItem(KEY_CFG_FB, HARDCODED_FB_URL);
+      return HARDCODED_FB_URL;
+    }
+    if (u.hostname.endsWith('.firebasedatabase.app') || u.hostname.endsWith('.firebaseio.com')) {
+      return u.origin;
+    }
+  } catch (_) {}
+  localStorage.setItem(KEY_CFG_FB, HARDCODED_FB_URL);
+  return HARDCODED_FB_URL;
 }
 
 function normText(s) {
@@ -606,21 +608,11 @@ function saveLocalDb() {
 }
 
 // ---------- Atomic Multi-Friend Firebase RTDB Sync (No Overwrites!) ----------
+let initialPushDone = false;
+
 function roomBaseUrl() {
   const fb = getFbUrl();
   return fb ? `${fb}/ctb_studio_rooms/${getRoomId()}` : '';
-}
-
-async function pullFullRoomNow(silent = true) {
-  const base = roomBaseUrl();
-  if (!base) return;
-  try {
-    const res = await fetch(`${base}.json?t=${Date.now()}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data && typeof data === 'object') applyRoomRootSnapshot(data);
-    updateSyncStatus(`??????${getRoomId()}`, 'live');
-  } catch (_) {}
 }
 
 async function syncAtomicRecord(collection, key, valueOrNull) {
@@ -629,38 +621,75 @@ async function syncAtomicRecord(collection, key, valueOrNull) {
   if (!base) return;
   const safeKey = encodeFbKey(key);
   try {
-    if (valueOrNull === null) {
-      await fetch(`${base}/${collection}/${safeKey}.json`, { method: 'DELETE' });
-    } else {
-      await fetch(`${base}/${collection}/${safeKey}.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(valueOrNull)
-      });
+    const res = valueOrNull === null
+      ? await fetch(`${base}/${collection}/${safeKey}.json`, { method: 'DELETE' })
+      : await fetch(`${base}/${collection}/${safeKey}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(valueOrNull)
+        });
+    if (!res.ok) {
+      updateSyncStatus(`???? (HTTP ${res.status})`, 'warn');
+      showToast(`???????HTTP ${res.status}`);
+      return;
     }
-  } catch (_) {
-    updateSyncStatus('同步重試中', 'warn');
+    updateSyncStatus(`??????${getRoomId()}`, 'live');
+  } catch (err) {
+    updateSyncStatus(`?????${err.message || '????'}`, 'warn');
+    showToast('??????????????? Brave ??');
   }
 }
 
-async function uploadFullLocalDbToRoomIfEmpty() {
+async function uploadFullLocalDbToRoom() {
+  const base = roomBaseUrl();
+  if (!base) return false;
+  try {
+    for (const col of ['rules', 'welcomeRules', 'ignored', 'customTrips']) {
+      const entries = Object.entries(studioDb[col] || {});
+      if (!entries.length) continue;
+      const patchObj = {};
+      for (const [k, v] of entries) {
+        patchObj[encodeFbKey(k)] = col === 'ignored'
+          ? (typeof v === 'object' ? v : { audioPath: k })
+          : (col === 'customTrips' ? { ...v, tripKey: k } : { ...v, audioPath: k });
+      }
+      const res = await fetch(`${base}/${col}.json`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchObj)
+      });
+      if (!res.ok) {
+        updateSyncStatus(`???? (HTTP ${res.status})`, 'warn');
+        showToast(`?????????HTTP ${res.status}`);
+        return false;
+      }
+    }
+    initialPushDone = true;
+    return true;
+  } catch (err) {
+    updateSyncStatus(`?????${err.message || '????'}`, 'warn');
+    return false;
+  }
+}
+
+async function pullFullRoomNow(silent = true) {
   const base = roomBaseUrl();
   if (!base) return;
-  for (const col of ['rules', 'welcomeRules', 'ignored', 'customTrips']) {
-    const entries = Object.entries(studioDb[col] || {});
-    if (!entries.length) continue;
-    const patchObj = {};
-    for (const [k, v] of entries) {
-      patchObj[encodeFbKey(k)] = col === 'ignored'
-        ? (typeof v === 'object' ? v : { audioPath: k })
-        : (col === 'customTrips' ? { ...v, tripKey: k } : { ...v, audioPath: k });
+  try {
+    const res = await fetch(`${base}.json?t=${Date.now()}`);
+    if (!res.ok) {
+      updateSyncStatus(`???? (HTTP ${res.status})`, 'warn');
+      if (!silent) showToast(`???????HTTP ${res.status}`);
+      return;
     }
-    const r = await fetch(`${base}/${col}.json`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patchObj)
-    }).catch(() => null);
-    if (r && r.ok) updateSyncStatus(`??????${getRoomId()}`, 'live');
+    const data = await res.json();
+    if (data && typeof data === 'object') {
+      applyRoomRootSnapshot(data);
+    }
+    updateSyncStatus(`??????${getRoomId()}`, 'live');
+  } catch (err) {
+    updateSyncStatus(`?????${err.message || '????'}`, 'warn');
+    if (!silent) showToast(`???? Firebase?${err.message || '?????'}`);
   }
 }
 
@@ -672,11 +701,12 @@ async function pushPresence() {
   onlinePeers[CLIENT_ID] = me;
   renderPresenceUi();
   try {
-    await fetch(`${base}/presence/${CLIENT_ID}.json`, {
+    const res = await fetch(`${base}/presence/${CLIENT_ID}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(me)
     });
+    if (res.ok) updateSyncStatus(`??????${getRoomId()}`, 'live');
   } catch (_) {}
 }
 
@@ -709,8 +739,8 @@ function renderPresenceUi() {
   const chips = peers.map(p => `
     <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800/80 xl:w-full text-slate-200 text-[11px] font-bold">
       <span class="w-2 h-2 rounded-full shrink-0" style="background:${esc(p.color || '#0B875B')}"></span>
-      <span class="truncate">${esc(p.name)}${p.isMe ? '（你）' : ''}</span>
-      ${p.activeItem && !p.isMe ? `<span class="ml-auto text-[10px] text-amber-300 shrink-0">編輯中</span>` : ''}
+      <span class="truncate">${esc(p.name)}${p.isMe ? '???' : ''}</span>
+      ${p.activeItem && !p.isMe ? `<span class="ml-auto text-[10px] text-amber-300 shrink-0">???</span>` : ''}
     </div>
   `).join('');
   if (rail) rail.innerHTML = chips;
@@ -718,7 +748,7 @@ function renderPresenceUi() {
     modal.innerHTML = peers.map(p => `
       <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-800 text-[11px] font-bold">
         <span class="w-2 h-2 rounded-full" style="background:${esc(p.color || '#0B875B')}"></span>
-        ${esc(p.name)}${p.isMe ? '（你）' : ''}
+        ${esc(p.name)}${p.isMe ? '???' : ''}
       </span>
     `).join('');
   }
@@ -732,39 +762,38 @@ function updateSyncStatus(text, level) {
     dot.className = `w-2 h-2 rounded-full shrink-0 ${level === 'live' ? 'bg-emerald-400 animate-pulse' : level === 'warn' ? 'bg-amber-400' : 'bg-slate-400'}`;
   }
   if (mState) mState.textContent = text;
-  if (lbl) lbl.textContent = level === 'live' ? '協作中' : '邀請朋友';
+  if (lbl) lbl.textContent = level === 'live' ? '???' : '????';
 }
 
 function applyRoomRootSnapshot(data) {
   if (!data || typeof data !== 'object') return;
-  if (data.rules && typeof data.rules === 'object') {
-    const next = {};
-    for (const v of Object.values(data.rules)) {
-      if (v && v.audioPath) next[v.audioPath] = v;
+  const extractByKey = (obj, keyField) => {
+    const out = {};
+    if (obj && typeof obj === 'object') {
+      for (const v of Object.values(obj)) {
+        if (v && v[keyField]) out[v[keyField]] = v;
+      }
     }
-    studioDb.rules = { ...studioDb.rules, ...next };
+    return out;
+  };
+
+  const remoteRules = extractByKey(data.rules, 'audioPath');
+  const remoteWel = extractByKey(data.welcomeRules, 'audioPath');
+  const remoteIgn = extractByKey(data.ignored, 'audioPath');
+  const remoteTrips = extractByKey(data.customTrips, 'tripKey');
+
+  if (initialPushDone) {
+    studioDb.rules = remoteRules;
+    studioDb.welcomeRules = remoteWel;
+    studioDb.ignored = remoteIgn;
+    studioDb.customTrips = remoteTrips;
+  } else {
+    studioDb.rules = { ...remoteRules, ...studioDb.rules };
+    studioDb.welcomeRules = { ...remoteWel, ...studioDb.welcomeRules };
+    studioDb.ignored = { ...remoteIgn, ...studioDb.ignored };
+    studioDb.customTrips = { ...remoteTrips, ...studioDb.customTrips };
   }
-  if (data.welcomeRules && typeof data.welcomeRules === 'object') {
-    const next = {};
-    for (const v of Object.values(data.welcomeRules)) {
-      if (v && v.audioPath) next[v.audioPath] = v;
-    }
-    studioDb.welcomeRules = { ...studioDb.welcomeRules, ...next };
-  }
-  if (data.ignored && typeof data.ignored === 'object') {
-    const next = {};
-    for (const v of Object.values(data.ignored)) {
-      if (v && v.audioPath) next[v.audioPath] = v;
-    }
-    studioDb.ignored = next;
-  }
-  if (data.customTrips && typeof data.customTrips === 'object') {
-    const next = {};
-    for (const v of Object.values(data.customTrips)) {
-      if (v && v.tripKey) next[v.tripKey] = v;
-    }
-    studioDb.customTrips = { ...studioDb.customTrips, ...next };
-  }
+
   if (data.presence && typeof data.presence === 'object') {
     onlinePeers = data.presence;
   }
@@ -775,54 +804,6 @@ function applyRoomRootSnapshot(data) {
   else if (selectedWelcomePath && document.activeElement?.tagName !== 'INPUT') renderWelcomeInspector();
 }
 
-function applyRoomDelta(pathStr, val) {
-  const parts = String(pathStr || '').split('/').filter(Boolean);
-  if (parts.length === 0) {
-    applyRoomRootSnapshot(val);
-    return;
-  }
-  const [col, subKey] = parts;
-  if (col === 'presence') {
-    if (subKey) {
-      if (val === null) delete onlinePeers[subKey];
-      else onlinePeers[subKey] = val;
-    } else if (val && typeof val === 'object') {
-      onlinePeers = val;
-    }
-    renderPresenceUi();
-    renderMainList();
-    return;
-  }
-  // For rule/welcome/ignored/customTrips updates, re-fetch that collection cleanly to stay exact
-  if (['rules', 'welcomeRules', 'ignored', 'customTrips'].includes(col)) {
-    const base = roomBaseUrl();
-    if (!base) return;
-    safeFetchJson(`${base}/${col}.json?t=${Date.now()}`).then(fresh => {
-      if (col === 'rules') {
-        const next = {};
-        if (fresh && typeof fresh === 'object') Object.values(fresh).forEach(v => { if (v?.audioPath) next[v.audioPath] = v; });
-        studioDb.rules = next;
-      } else if (col === 'welcomeRules') {
-        const next = {};
-        if (fresh && typeof fresh === 'object') Object.values(fresh).forEach(v => { if (v?.audioPath) next[v.audioPath] = v; });
-        studioDb.welcomeRules = next;
-      } else if (col === 'ignored') {
-        const next = {};
-        if (fresh && typeof fresh === 'object') Object.values(fresh).forEach(v => { if (v?.audioPath) next[v.audioPath] = v; });
-        studioDb.ignored = next;
-      } else if (col === 'customTrips') {
-        const next = {};
-        if (fresh && typeof fresh === 'object') Object.values(fresh).forEach(v => { if (v?.tripKey) next[v.tripKey] = v; });
-        studioDb.customTrips = next;
-      }
-      saveLocalDb();
-      renderMainList();
-      if (selectedAudioPath && document.activeElement?.tagName !== 'INPUT') renderAudioInspector();
-      else if (selectedWelcomePath && document.activeElement?.tagName !== 'INPUT') renderWelcomeInspector();
-    });
-  }
-}
-
 function startRealtimeCollab() {
   if (fbEventSource) { try { fbEventSource.close(); } catch (_) {} fbEventSource = null; }
   if (fbHeartbeatTimer) { clearInterval(fbHeartbeatTimer); fbHeartbeatTimer = null; }
@@ -830,44 +811,23 @@ function startRealtimeCollab() {
 
   const base = roomBaseUrl();
   if (!base) {
-    updateSyncStatus('單機模式（設定雲端即可多人協作）', 'idle');
+    updateSyncStatus('????', 'idle');
     renderPresenceUi();
     return;
   }
 
-  uploadFullLocalDbToRoomIfEmpty().then(() => {
+  uploadFullLocalDbToRoom().then(() => {
     pushPresence();
-    try {
-      const es = new EventSource(`${base}.json`);
-      fbEventSource = es;
-      es.onopen = () => updateSyncStatus(`已連線房間：${getRoomId()}`, 'live');
-      es.addEventListener('put', (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          applyRoomDelta(msg.path, msg.data);
-        } catch (_) {}
-      });
-      es.addEventListener('patch', (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          applyRoomDelta(msg.path, msg.data);
-        } catch (_) {}
-      });
-      es.onerror = () => updateSyncStatus('雲端重連中...', 'warn');
-    } catch (_) {
-      updateSyncStatus('輪詢模式', 'warn');
-    }
+    pullFullRoomNow(true);
   });
 
   fbHeartbeatTimer = setInterval(() => {
     if (document.visibilityState === 'visible') pushPresence();
-  }, 25000);
+  }, 20000);
 
   fbFallbackTimer = setInterval(() => {
-    if (document.visibilityState === 'visible') {
-      pullFullRoomNow(true);
-    }
-  }, 4000);
+    if (document.visibilityState === 'visible') pullFullRoomNow(true);
+  }, 3000);
 }
 
 function isAdminUser() {
@@ -2468,6 +2428,7 @@ async function loadRemoteData() {
 
   allRouteIds = Array.from(routeSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   mergeMappingIntoDb(mapData);
+  await uploadFullLocalDbToRoom();
   await pullFullRoomNow(true);
   renderMainList();
   if (selectedAudioPath) renderAudioInspector();
@@ -2612,8 +2573,17 @@ function initEvents() {
 
   document.getElementById('btnExportJson').onclick = () => { downloadJson(buildExportPayload(), 'audio_mapping.json'); showToast('已下載 audio_mapping.json'); };
   document.getElementById('btnPublishWeb').onclick = publishToWebRepo;
-  document.getElementById('btnReloadData').onclick = async () => { await loadRemoteData(); await pullFullRoomNow(false); showToast('?????????'); };
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullFullRoomNow(true); });
+  document.getElementById('btnReloadData').onclick = async () => {
+    await loadRemoteData();
+    const ok = await uploadFullLocalDbToRoom();
+    await pullFullRoomNow(false);
+    if (ok) showToast(`????????? ${Object.keys(studioDb.rules).length} ????`);
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      uploadFullLocalDbToRoom().then(() => pullFullRoomNow(true));
+    }
+  });
 
   document.getElementById('importJsonInput').onchange = async (e) => {
     const f = e.target.files?.[0];
