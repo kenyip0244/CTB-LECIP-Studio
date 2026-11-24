@@ -2491,9 +2491,8 @@ function renderTripInspector() {
       </div>
 
       <div class="rounded-xl bg-[#3b3a36] text-white px-3.5 py-2.5 border border-slate-300 space-y-0.5">
-        <div class="text-[10px] font-bold text-zinc-300">報站器「選擇班次頁」預覽</div>
-        <div class="text-sm font-black truncate">${esc(trip.defaultName)}</div>
-        <div id="tripLabelPreview" class="text-xs font-black text-[#fff000] truncate ${curLabel ? '' : 'hidden'}">${esc(curLabel)}</div>
+        <div class="text-[10px] font-bold text-zinc-300">報站器「選擇班次頁」預覽（只顯示班次名稱）</div>
+        <div id="tripLabelPreview" class="text-sm font-black truncate">${esc(curLabel || trip.defaultName)}</div>
       </div>
     </div>
 
@@ -2613,8 +2612,7 @@ function renderTripInspector() {
 
   const syncPreview = () => {
     const val = (labelInp.value || '').trim();
-    previewEl.textContent = val;
-    previewEl.classList.toggle('hidden', !val);
+    previewEl.textContent = val || trip.defaultName;
   };
 
   const updateTypeUi = () => {
