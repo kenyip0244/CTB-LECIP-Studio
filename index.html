@@ -471,6 +471,67 @@
     </div>
   </div>
 
+  <!-- Create Trip Modal -->
+  <div id="tripCreateModal" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-[1px] flex items-center justify-center p-3">
+    <div class="w-full max-w-lg max-h-[92vh] bg-white rounded-2xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden">
+      <div class="px-4 py-3.5 bg-[#0B1622] text-white flex items-center justify-between gap-2 shrink-0">
+        <div>
+          <h2 class="text-sm font-black">新增路線班次</h2>
+          <p class="text-[11px] text-slate-300">可直接匯入現有班次嘅車站及分段收費，建立後即可刪站、加 API 車站與逐站改價</p>
+        </div>
+        <button id="btnCloseTripCreate" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-black">✕</button>
+      </div>
+
+      <div class="p-4 overflow-y-auto space-y-4 text-xs">
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="space-y-1">
+            <label class="font-black text-slate-700">路線編號 *</label>
+            <input id="ctRouteInput" type="text" placeholder="例如：1、102、A21" class="w-full min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-black uppercase focus:bg-white focus:border-[#0052CC]" />
+          </div>
+          <div class="space-y-1">
+            <label class="font-black text-slate-700">方向 *</label>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button type="button" data-ct-bound="O" class="ct-bound-btn min-h-[42px] rounded-xl bg-[#0052CC] text-white font-black border border-[#0052CC]">去程 (O)</button>
+              <button type="button" data-ct-bound="I" class="ct-bound-btn min-h-[42px] rounded-xl bg-slate-50 text-slate-700 font-black border border-slate-200">回程 (I)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="font-black text-slate-700">目的地／總站名稱（留空會自動採用最後一站名稱）</label>
+          <input id="ctDestInput" type="text" placeholder="例如：跑馬地 (上)、中環 (港澳碼頭)" class="w-full min-h-[40px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-bold focus:bg-white focus:border-[#0052CC]" />
+        </div>
+
+        <div class="space-y-2 pt-2 border-t border-slate-100">
+          <label class="font-black text-slate-700 block">選擇班次頁顯示命名</label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-bold">
+            <button type="button" data-ct-type="normal" class="ct-type-btn min-h-[38px] px-2 rounded-xl border bg-[#0B875B] text-white border-[#0B875B]">正常路線</button>
+            <button type="button" data-ct-type="express" class="ct-type-btn min-h-[38px] px-2 rounded-xl border bg-slate-50 text-slate-700 border-slate-200">特快班次</button>
+            <button type="button" data-ct-type="special_via" class="ct-type-btn min-h-[38px] px-2 rounded-xl border bg-slate-50 text-slate-700 border-slate-200">特別班次經XXX</button>
+            <button type="button" data-ct-type="custom" class="ct-type-btn min-h-[38px] px-2 rounded-xl border bg-slate-50 text-slate-700 border-slate-200">自由填入</button>
+          </div>
+          <input id="ctViaInput" type="text" placeholder="途經地點（如：西隧、銅鑼灣）" class="hidden w-full min-h-[40px] px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 text-sm font-bold" />
+          <input id="ctLabelInput" type="text" value="正常路線" placeholder="報站器選擇班次頁顯示名稱..." class="w-full min-h-[42px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-black focus:bg-white focus:border-[#0052CC]" />
+        </div>
+
+        <div class="space-y-2 pt-2 border-t border-slate-100">
+          <div class="flex items-center justify-between gap-2">
+            <label class="font-black text-slate-800">直接匯入現有班次的車站與收費（選填）</label>
+            <button type="button" id="btnCtClearImport" class="hidden text-[11px] font-bold text-[#D0302F] hover:underline">取消匯入</button>
+          </div>
+          <div id="ctImportChosen" class="hidden px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold"></div>
+          <input id="ctImportSearch" type="text" placeholder="搜尋要匯入嘅路線或班次（例如：1、102、美孚）..." class="w-full min-h-[40px] px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-bold focus:border-[#0052CC]" />
+          <div id="ctImportList" class="max-h-44 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-slate-50"></div>
+        </div>
+      </div>
+
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
+        <button id="btnCancelTripCreate" class="min-h-[42px] px-4 rounded-xl bg-white border border-slate-300 text-slate-700 text-xs font-bold">取消</button>
+        <button id="btnConfirmTripCreate" class="min-h-[42px] px-5 rounded-xl bg-[#0B875B] hover:bg-[#096E4A] text-white text-xs font-black">建立班次並進入編輯</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div id="toastBox" class="hidden fixed bottom-20 md:bottom-5 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:right-5 z-50 px-4 py-2.5 rounded-xl bg-[#0B1622] text-white text-xs font-bold shadow-2xl border border-slate-700 max-w-[90vw] sm:max-w-sm text-center"></div>
 
@@ -525,6 +586,8 @@ let selectedMissingTripKey = '';
 let selectedTripKey = '';
 let selectedIgnoredPath = '';
 let currentFilteredTripKeys = [];
+let tripEditMode = false;
+let showDeletedTrips = false;
 let pendingUploadFiles = [];
 
 let playerAudio = null;
@@ -852,7 +915,16 @@ function applyRoomRootSnapshot(data) {
     const out = {};
     if (obj && typeof obj === 'object') {
       for (const v of Object.values(obj)) {
-        if (v && v[keyField]) out[v[keyField]] = v;
+        if (v && v[keyField]) {
+          const item = { ...v };
+          if (item.customStops && !Array.isArray(item.customStops) && typeof item.customStops === 'object') {
+            item.customStops = Object.keys(item.customStops)
+              .sort((a, b) => Number(a) - Number(b))
+              .map(k => item.customStops[k])
+              .filter(Boolean);
+          }
+          out[item[keyField]] = item;
+        }
       }
     }
     return out;
@@ -1006,7 +1078,7 @@ function getTripDisplayName(tripKey) {
   const base = tripCatalog.get(tripKey);
   if (base) return base.defaultName;
   const custom = studioDb.customTrips[tripKey];
-  return (custom && custom.name) ? custom.name : tripKey;
+  return (custom && (custom.defaultName || custom.name)) ? (custom.defaultName || custom.name) : tripKey;
 }
 
 function getTripLabel(tripKey) {
@@ -1024,28 +1096,88 @@ function getTripLabel(tripKey) {
   return '';
 }
 
-function getAllTripEntries() {
+function normalizeTripStopsArray(rawStops) {
+  let list = [];
+  if (Array.isArray(rawStops)) list = rawStops;
+  else if (rawStops && typeof rawStops === 'object') {
+    list = Object.keys(rawStops).sort((a, b) => Number(a) - Number(b)).map(k => rawStops[k]).filter(Boolean);
+  }
+  return list.filter(s => s && s.stopId).map((s, idx) => {
+    const fareVal = (s.sectionFare != null && s.sectionFare !== '' && Number.isFinite(Number(s.sectionFare)))
+      ? Math.round(Number(s.sectionFare) * 10) / 10
+      : null;
+    const rec = {
+      seq: idx + 1,
+      stopId: String(s.stopId).trim(),
+      sectionFare: fareVal,
+      section: (s.section != null && s.section !== '' && Number.isFinite(Number(s.section))) ? Number(s.section) : null
+    };
+    if (s.apiStopMeta && typeof s.apiStopMeta === 'object') rec.apiStopMeta = s.apiStopMeta;
+    return rec;
+  });
+}
+
+function recalcStopSections(stops) {
+  let curSec = 1;
+  let curFare = null;
+  return (stops || []).map((s, idx) => {
+    const fare = (s.sectionFare != null && s.sectionFare !== '' && Number.isFinite(Number(s.sectionFare)))
+      ? Math.round(Number(s.sectionFare) * 10) / 10
+      : null;
+    if (idx === 0) {
+      curSec = 1;
+      curFare = fare;
+    } else if (fare != null) {
+      if (curFare == null) curFare = fare;
+      else if (Math.abs(fare - curFare) >= 0.05) {
+        curSec += 1;
+        curFare = fare;
+      }
+    }
+    const out = { seq: idx + 1, stopId: String(s.stopId).trim(), sectionFare: fare, section: curSec };
+    if (s.apiStopMeta) out.apiStopMeta = s.apiStopMeta;
+    return out;
+  });
+}
+
+function getAllTripEntries(opts = {}) {
+  const includeDeleted = Boolean(opts.includeDeleted);
   const map = new Map();
   for (const [k, v] of tripCatalog.entries()) {
     const c = studioDb.customTrips?.[k];
+    if (c?.deleted && !includeDeleted) continue;
+    const hasCustomStops = c && c.customStops != null;
+    const stops = hasCustomStops ? recalcStopSections(normalizeTripStopsArray(c.customStops)) : recalcStopSections(v.stops);
+    const firstFare = stops.length && stops[0].sectionFare != null ? stops[0].sectionFare : (c?.fullFare ?? v.fullFare ?? null);
     map.set(k, {
       tripKey: k, routeId: v.routeId, bound: v.bound, serviceType: v.serviceType,
-      name: v.defaultName, defaultName: v.defaultName, destTc: v.destTc || '',
-      stops: v.stops, isManual: false,
+      name: v.defaultName, defaultName: v.defaultName,
+      destTc: (c?.destTc || v.destTc || ''),
+      origTc: (c?.origTc || v.origTc || ''),
+      fullFare: firstFare,
+      stops, hasCustomStops, isManual: false, deleted: Boolean(c?.deleted),
       tripLabel: getTripLabel(k),
       tripType: c?.tripType || '', viaText: c?.viaText || ''
     });
   }
   for (const [k, c] of Object.entries(studioDb.customTrips || {})) {
-    if (!map.has(k)) {
-      map.set(k, {
-        tripKey: k, routeId: c.routeId || '', bound: c.bound || 'O', serviceType: c.serviceType || '1',
-        name: c.name || k, defaultName: c.defaultName || c.name || k, destTc: c.destTc || '',
-        stops: [], isManual: true,
-        tripLabel: getTripLabel(k),
-        tripType: c.tripType || '', viaText: c.viaText || ''
-      });
-    }
+    if (!c || map.has(k)) continue;
+    if (c.deleted && !includeDeleted) continue;
+    const stops = recalcStopSections(normalizeTripStopsArray(c.customStops));
+    const firstSt = stops.length ? stopById.get(stops[0].stopId) : null;
+    const lastSt = stops.length ? stopById.get(stops[stops.length - 1].stopId) : null;
+    const firstFare = stops.length && stops[0].sectionFare != null ? stops[0].sectionFare : (c.fullFare ?? null);
+    map.set(k, {
+      tripKey: k, routeId: String(c.routeId || '').toUpperCase(), bound: String(c.bound || 'O').toUpperCase(),
+      serviceType: c.serviceType || '1',
+      name: c.defaultName || c.name || k, defaultName: c.defaultName || c.name || k,
+      destTc: c.destTc || lastSt?.nameTc || '',
+      origTc: c.origTc || firstSt?.nameTc || '',
+      fullFare: firstFare,
+      stops, hasCustomStops: true, isManual: true, deleted: Boolean(c.deleted),
+      tripLabel: getTripLabel(k),
+      tripType: c.tripType || '', viaText: c.viaText || ''
+    });
   }
   return Array.from(map.values()).sort((a, b) => {
     const rCmp = a.routeId.localeCompare(b.routeId, undefined, { numeric: true });
@@ -1055,11 +1187,16 @@ function getAllTripEntries() {
 
 function getTripTypeBadgeHtml(t) {
   const lbl = (t.tripLabel || '').trim();
-  if (!lbl) return '';
-  if (t.tripType === 'normal') return `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">${esc(lbl)}</span>`;
-  if (t.tripType === 'express') return `<span class="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-[#0052CC] text-[10px] font-bold">${esc(lbl)}</span>`;
-  if (t.tripType === 'special_via') return `<span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[10px] font-bold">${esc(lbl)}</span>`;
-  return `<span class="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-800 text-[10px] font-bold">${esc(lbl)}</span>`;
+  const badges = [];
+  if (t.isManual) badges.push(`<span class="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 text-[10px] font-bold">新增班次</span>`);
+  else if (t.hasCustomStops) badges.push(`<span class="px-2 py-0.5 rounded-md bg-cyan-50 border border-cyan-200 text-cyan-800 text-[10px] font-bold">已改站序/收費</span>`);
+  if (lbl) {
+    if (t.tripType === 'normal') badges.push(`<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">${esc(lbl)}</span>`);
+    else if (t.tripType === 'express') badges.push(`<span class="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-[#0052CC] text-[10px] font-bold">${esc(lbl)}</span>`);
+    else if (t.tripType === 'special_via') badges.push(`<span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[10px] font-bold">${esc(lbl)}</span>`);
+    else badges.push(`<span class="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-800 text-[10px] font-bold">${esc(lbl)}</span>`);
+  }
+  return badges.join('');
 }
 
 function buildStopCoverageIndex() {
@@ -1483,7 +1620,11 @@ function renderMainList() {
   if (activeNav === 'trips') {
     pageFooter.classList.remove('hidden');
     const coverageMap = buildStopCoverageIndex();
-    const trips = getAllTripEntries().filter(t => {
+    const allIncDel = getAllTripEntries({ includeDeleted: true });
+    const deletedBuiltIns = allIncDel.filter(t => t.deleted && !t.isManual);
+    const sourceList = showDeletedTrips ? deletedBuiltIns : allIncDel.filter(t => !t.deleted);
+
+    const trips = sourceList.filter(t => {
       if (!kw) return true;
       const stopHay = t.stops.slice(0, 60).map(s => stopById.get(s.stopId)?.nameTc || '').join(' ');
       return `${t.routeId} ${t.name} ${t.defaultName} ${t.tripLabel || ''} ${t.viaText || ''} ${t.tripKey} ${stopHay}`.toLowerCase().includes(kw);
@@ -1499,16 +1640,31 @@ function renderMainList() {
     document.getElementById('btnPrevPage').disabled = currentPage <= 0;
     document.getElementById('btnNextPage').disabled = currentPage >= totalPages - 1;
 
-    container.innerHTML = slice.map(t => {
+    const topTools = `
+      <div class="px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex items-center gap-1.5">
+          <button id="btnOpenCreateTripModal" class="min-h-[36px] px-3 py-1.5 rounded-xl bg-[#0052CC] hover:bg-[#0041A3] text-white text-xs font-black">＋ 新增班次</button>
+          ${deletedBuiltIns.length ? `
+            <button id="btnToggleDeletedTrips" class="min-h-[36px] px-2.5 py-1.5 rounded-xl border text-xs font-bold ${showDeletedTrips ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-700 border-slate-300'}">
+              ${showDeletedTrips ? '返回正常班次' : `已刪除 (${deletedBuiltIns.length})`}
+            </button>
+          ` : ''}
+        </div>
+        <span class="text-[11px] font-bold text-slate-500">點選班次可改命名、刪/加車站及逐站改收費</span>
+      </div>
+    `;
+
+    container.innerHTML = topTools + (slice.map(t => {
       let cov = 0;
       for (const s of t.stops) {
         if (getMatchingRulesForStopOnTrip(s.stopId, t.routeId, t.name, coverageMap).length > 0) cov++;
       }
       const total = t.stops.length;
       const miss = Math.max(0, total - cov);
-      const firstSt = total > 0 ? stopById.get(t.stops[0].stopId) : null;
-      const lastSt = total > 0 ? stopById.get(t.stops[total - 1].stopId) : null;
-      const odText = firstSt && lastSt ? `${firstSt.nameTc} → ${lastSt.nameTc}` : (t.isManual ? '手動建立班次' : '');
+      const firstSt = total > 0 ? (stopById.get(t.stops[0].stopId) || t.stops[0].apiStopMeta) : null;
+      const lastSt = total > 0 ? (stopById.get(t.stops[total - 1].stopId) || t.stops[total - 1].apiStopMeta) : null;
+      const odText = firstSt && lastSt ? `${firstSt.nameTc} → ${lastSt.nameTc}` : (t.destTc ? `往 ${t.destTc}` : '未設車站');
+      const fareTxt = t.fullFare != null ? `$${Number(t.fullFare).toFixed(1)}` : '';
       const typeBadge = getTripTypeBadgeHtml(t);
 
       return `
@@ -1517,39 +1673,59 @@ function renderMainList() {
             <div class="flex items-center gap-2 min-w-0">
               <span class="px-2 py-0.5 rounded-md bg-[#0B1622] text-[#F6B800] text-xs font-black shrink-0">${esc(t.routeId || '自訂')}</span>
               <span class="text-[13px] font-black text-slate-900 truncate">${esc(t.name)}</span>
+              ${fareTxt ? `<span class="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-black shrink-0">${fareTxt}</span>` : ''}
             </div>
             <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
               ${typeBadge}
-              ${odText ? `<span class="text-slate-500 truncate max-w-[220px]">${esc(odText)}</span>` : ''}
-              ${total > 0
-                ? `<span class="${miss === 0 ? 'text-[#0B875B]' : 'text-slate-500'}">・${total}站（覆蓋 ${cov}/${total}）</span>`
-                : ''}
+              <span class="text-slate-500 truncate max-w-[220px]">${esc(odText)}</span>
+              <span class="${miss === 0 && total > 0 ? 'text-[#0B875B]' : 'text-slate-500'}">・${total}站${total > 0 ? `（覆蓋 ${cov}/${total}）` : ''}</span>
             </div>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
-            <span class="px-2.5 py-1.5 rounded-lg bg-blue-50 text-[#0052CC] text-[11px] font-bold">車站／命名</span>
-            ${t.isManual ? `<button data-del-trip="${esc(t.tripKey)}" class="min-h-[32px] px-2 py-1 rounded-lg bg-red-50 text-[#D0302F] text-[11px] font-bold">移除</button>` : ''}
+            ${showDeletedTrips
+              ? `<button data-restore-trip="${esc(t.tripKey)}" class="min-h-[34px] px-3 py-1 rounded-lg bg-[#0B875B] text-white text-xs font-bold">恢復班次</button>`
+              : `<span class="px-2.5 py-1.5 rounded-lg bg-blue-50 text-[#0052CC] text-[11px] font-bold">編輯／車站</span>
+                 <button data-del-trip="${esc(t.tripKey)}" title="刪除此班次" class="min-h-[32px] px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-[#D0302F] text-[11px] font-bold">刪除</button>`}
           </div>
         </div>
       `;
-    }).join('') || `<div class="py-16 text-center text-xs font-bold text-slate-400">找不到符合條件嘅路線班次</div>`;
+    }).join('') || `<div class="py-16 text-center text-xs font-bold text-slate-400">${showDeletedTrips ? '未有已刪除嘅系統班次' : '找不到符合條件嘅路線班次'}</div>`);
+
+    const btnOpen = document.getElementById('btnOpenCreateTripModal');
+    if (btnOpen) btnOpen.onclick = () => openTripCreateModal();
+    const btnTogDel = document.getElementById('btnToggleDeletedTrips');
+    if (btnTogDel) btnTogDel.onclick = () => { showDeletedTrips = !showDeletedTrips; currentPage = 0; renderMainList(); };
 
     container.querySelectorAll('[data-select-trip]').forEach(row => {
       row.onclick = (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.closest('button') || showDeletedTrips) return;
+        tripEditMode = false;
         selectTripForInspector(row.dataset.selectTrip);
       };
     });
     container.querySelectorAll('[data-del-trip]').forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
-        const k = btn.dataset.delTrip;
-        delete studioDb.customTrips[k];
-        syncAtomicRecord('customTrips', k, null);
-        if (selectedTripKey === k) { selectedTripKey = ''; closeMobileInspector(); }
+        deleteTripByKey(btn.dataset.delTrip);
+      };
+    });
+    container.querySelectorAll('[data-restore-trip]').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const k = btn.dataset.restoreTrip;
+        const c = studioDb.customTrips?.[k];
+        if (c) {
+          c.deleted = false;
+          c.updatedAt = new Date().toISOString();
+          c.updatedBy = getMyName();
+          syncAtomicRecord('customTrips', k, c);
+        }
+        showToast('已恢復系統班次');
+        if (!getAllTripEntries({ includeDeleted: true }).some(x => x.deleted && !x.isManual)) showDeletedTrips = false;
         renderMainList();
       };
     });
+    return;
   }
 
   // 6. Ignored / Deleted Tab
@@ -2409,6 +2585,240 @@ function selectTripForInspector(tripKey) {
   openMobileInspector();
 }
 
+function deleteTripByKey(tripKey) {
+  const trip = getAllTripEntries({ includeDeleted: true }).find(t => t.tripKey === tripKey);
+  if (!trip) return;
+  const msg = trip.isManual
+    ? `確定要永久刪除新增班次「${trip.name}」？`
+    : `確定要刪除（隱藏）系統班次「${trip.name}」？\n（發佈後報站器將唔會顯示此班次，日後亦可喺「已刪除」恢復）`;
+  if (!confirm(msg)) return;
+
+  if (trip.isManual) {
+    delete studioDb.customTrips[tripKey];
+    syncAtomicRecord('customTrips', tripKey, null);
+  } else {
+    const base = tripCatalog.get(tripKey);
+    const prev = studioDb.customTrips[tripKey] || {};
+    const rec = {
+      ...prev,
+      tripKey,
+      name: base?.defaultName || trip.defaultName,
+      defaultName: base?.defaultName || trip.defaultName,
+      routeId: base?.routeId || trip.routeId,
+      bound: base?.bound || trip.bound,
+      serviceType: base?.serviceType || trip.serviceType,
+      destTc: prev.destTc || base?.destTc || '',
+      deleted: true,
+      updatedAt: new Date().toISOString(),
+      updatedBy: getMyName()
+    };
+    studioDb.customTrips[tripKey] = rec;
+    syncAtomicRecord('customTrips', tripKey, rec);
+  }
+  if (selectedTripKey === tripKey) {
+    selectedTripKey = '';
+    tripEditMode = false;
+    closeMobileInspector();
+  }
+  showToast(`已刪除班次：${trip.name}`);
+  renderMainList();
+}
+
+async function lookupOfficialCtbApiStop(stopIdRaw) {
+  const clean = String(stopIdRaw || '').trim().replace(/\D/g, '');
+  if (!clean) return null;
+  const padded = clean.padStart(6, '0');
+  const existing = stopById.get(clean) || stopById.get(padded) || allStops.find(s => s.numId === clean.replace(/^0+/, ''));
+  if (existing) return existing;
+  try {
+    const res = await fetch(`https://rt.data.gov.hk/v2/transport/citybus/stop/${padded}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const d = json?.data;
+    if (!d || !d.stop) return null;
+    const tc = cleanJoint(d.name_tc || '');
+    const en = cleanJoint(d.name_en || '');
+    const sc = cleanJoint(d.name_sc || '');
+    const sid = String(d.stop).replace(/^0+/, '') || String(d.stop);
+    const st = {
+      stopId: sid, numId: sid, nameTc: tc, subTc: '', nameEn: en, nameSc: sc,
+      lat: Number(d.lat) || null, lng: Number(d.long) || null,
+      normTc: normText(tc), routes: []
+    };
+    stopById.set(sid, st);
+    allStops.push(st);
+    return st;
+  } catch (_) {
+    return null;
+  }
+}
+
+function openTripCreateModal() {
+  const modal = document.getElementById('tripCreateModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  const routeInp = document.getElementById('ctRouteInput');
+  const destInp = document.getElementById('ctDestInput');
+  const viaInp = document.getElementById('ctViaInput');
+  const labelInp = document.getElementById('ctLabelInput');
+  const impSearch = document.getElementById('ctImportSearch');
+  const impList = document.getElementById('ctImportList');
+  const impChosen = document.getElementById('ctImportChosen');
+  const btnClearImp = document.getElementById('btnCtClearImport');
+
+  let selBound = 'O';
+  let selType = 'normal';
+  let importSourceKey = '';
+
+  routeInp.value = '';
+  destInp.value = '';
+  viaInp.value = '';
+  viaInp.classList.add('hidden');
+  labelInp.value = '正常路線';
+  impSearch.value = '';
+  impChosen.classList.add('hidden');
+  btnClearImp.classList.add('hidden');
+
+  const refreshBoundBtns = () => {
+    modal.querySelectorAll('.ct-bound-btn').forEach(b => {
+      const on = b.dataset.ctBound === selBound;
+      b.className = `ct-bound-btn min-h-[42px] rounded-xl font-black border ${on ? 'bg-[#0052CC] text-white border-[#0052CC]' : 'bg-slate-50 text-slate-700 border-slate-200'}`;
+    });
+  };
+  const refreshTypeBtns = () => {
+    modal.querySelectorAll('.ct-type-btn').forEach(b => {
+      const t = b.dataset.ctType;
+      const on = t === selType;
+      let cls = 'ct-type-btn min-h-[38px] px-2 rounded-xl border ';
+      if (on) {
+        if (t === 'normal') cls += 'bg-[#0B875B] text-white border-[#0B875B]';
+        else if (t === 'express') cls += 'bg-[#0052CC] text-white border-[#0052CC]';
+        else if (t === 'special_via') cls += 'bg-amber-500 text-white border-amber-500';
+        else cls += 'bg-[#0B1622] text-white border-[#0B1622]';
+      } else cls += 'bg-slate-50 text-slate-700 border-slate-200';
+      b.className = cls;
+    });
+    viaInp.classList.toggle('hidden', selType !== 'special_via');
+  };
+  const applyPreset = () => {
+    if (selType === 'normal') labelInp.value = '正常路線';
+    else if (selType === 'express') labelInp.value = '特快班次';
+    else if (selType === 'special_via') {
+      const v = viaInp.value.trim().replace(/^經/, '');
+      labelInp.value = v ? `特別班次經${v}` : '特別班次經';
+    }
+  };
+
+  modal.querySelectorAll('.ct-bound-btn').forEach(b => b.onclick = () => { selBound = b.dataset.ctBound; refreshBoundBtns(); });
+  modal.querySelectorAll('.ct-type-btn').forEach(b => b.onclick = () => {
+    selType = b.dataset.ctType;
+    refreshTypeBtns();
+    if (selType === 'custom') { labelInp.focus(); labelInp.select(); }
+    else { applyPreset(); if (selType === 'special_via') viaInp.focus(); }
+  });
+  viaInp.oninput = () => { if (selType === 'special_via') applyPreset(); };
+
+  const allTrips = getAllTripEntries();
+  const renderImportList = () => {
+    const q = impSearch.value.trim().toLowerCase();
+    const rHint = routeInp.value.trim().toLowerCase();
+    const effQ = q || rHint;
+    const hits = allTrips.filter(t => !effQ || `${t.routeId} ${t.name} ${t.destTc} ${t.tripLabel}`.toLowerCase().includes(effQ)).slice(0, 40);
+    impList.innerHTML = hits.length ? hits.map(t => {
+      const active = importSourceKey === t.tripKey;
+      const fareTxt = t.fullFare != null ? `$${Number(t.fullFare).toFixed(1)}` : '未設價';
+      return `<button type="button" data-pick-imp="${esc(t.tripKey)}" class="w-full px-3 py-2 text-left flex items-center justify-between gap-2 ${active ? 'bg-emerald-100' : 'hover:bg-blue-50 bg-white'}">
+        <div class="min-w-0">
+          <div class="font-black text-slate-900 truncate">${esc(t.name)} ${t.tripLabel ? `<span class="text-[#0052CC]">(${esc(t.tripLabel)})</span>` : ''}</div>
+          <div class="text-[11px] text-slate-500">共 ${t.stops.length} 站・全程 ${fareTxt}</div>
+        </div>
+        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold shrink-0 ${active ? 'bg-[#0B875B] text-white' : 'bg-slate-100 text-slate-700'}">${active ? '已選匯入' : '匯入'}</span>
+      </button>`;
+    }).join('') : `<div class="p-4 text-center text-slate-400 font-bold">找不到相符班次</div>`;
+
+    impList.querySelectorAll('[data-pick-imp]').forEach(b => {
+      b.onclick = () => {
+        importSourceKey = b.dataset.pickImp;
+        const src = allTrips.find(x => x.tripKey === importSourceKey);
+        if (src) {
+          if (!routeInp.value.trim()) routeInp.value = src.routeId;
+          selBound = src.bound || 'O';
+          refreshBoundBtns();
+          if (!destInp.value.trim() && src.destTc) destInp.value = src.destTc;
+          const fareTxt = src.fullFare != null ? `全程 $${Number(src.fullFare).toFixed(1)}` : '未設收費';
+          impChosen.textContent = `已選匯入來源：${src.name}（${src.stops.length} 個車站・${fareTxt}）`;
+          impChosen.classList.remove('hidden');
+          btnClearImp.classList.remove('hidden');
+        }
+        renderImportList();
+      };
+    });
+  };
+
+  btnClearImp.onclick = () => {
+    importSourceKey = '';
+    impChosen.classList.add('hidden');
+    btnClearImp.classList.add('hidden');
+    renderImportList();
+  };
+  impSearch.oninput = renderImportList;
+  routeInp.oninput = () => { if (!impSearch.value.trim()) renderImportList(); };
+  refreshBoundBtns();
+  refreshTypeBtns();
+  renderImportList();
+
+  const closeModal = () => modal.classList.add('hidden');
+  document.getElementById('btnCloseTripCreate').onclick = closeModal;
+  document.getElementById('btnCancelTripCreate').onclick = closeModal;
+
+  document.getElementById('btnConfirmTripCreate').onclick = () => {
+    const rId = routeInp.value.trim().toUpperCase();
+    if (!rId) { showToast('請先輸入路線編號'); routeInp.focus(); return; }
+    const src = importSourceKey ? allTrips.find(x => x.tripKey === importSourceKey) : null;
+    const copiedStops = src ? recalcStopSections(src.stops.map(s => ({ ...s }))) : [];
+    const firstSt = copiedStops.length ? (stopById.get(copiedStops[0].stopId) || copiedStops[0].apiStopMeta) : null;
+    const lastSt = copiedStops.length ? (stopById.get(copiedStops[copiedStops.length - 1].stopId) || copiedStops[copiedStops.length - 1].apiStopMeta) : null;
+    const destTc = destInp.value.trim() || lastSt?.nameTc || src?.destTc || (selBound === 'I' ? '回程' : '去程');
+    const origTc = firstSt?.nameTc || src?.origTc || '';
+    const sameCount = getAllTripEntries({ includeDeleted: true }).filter(x => x.routeId === rId && x.bound === selBound).length;
+    const seqNo = sameCount + 1;
+    const svcId = 'c' + Date.now().toString(36).slice(-5);
+    const key = `${rId}|${selBound}|${svcId}`;
+    const defName = `${rId}-${destTc}-${seqNo}`;
+    const lbl = labelInp.value.trim();
+    const viaClean = selType === 'special_via' ? viaInp.value.trim().replace(/^經/, '') : '';
+    const fullFare = copiedStops.length && copiedStops[0].sectionFare != null ? copiedStops[0].sectionFare : (src?.fullFare ?? null);
+
+    const rec = {
+      tripKey: key,
+      name: defName,
+      defaultName: defName,
+      tripLabel: lbl,
+      routeId: rId,
+      bound: selBound,
+      serviceType: svcId,
+      destTc,
+      origTc,
+      fullFare,
+      customStops: copiedStops,
+      tripType: selType,
+      viaText: viaClean,
+      isManual: true,
+      deleted: false,
+      updatedAt: new Date().toISOString(),
+      updatedBy: getMyName()
+    };
+    studioDb.customTrips[key] = rec;
+    syncAtomicRecord('customTrips', key, rec);
+    closeModal();
+    showDeletedTrips = false;
+    tripEditMode = true;
+    showToast(`已新增班次「${lbl || defName}」${copiedStops.length ? `（已匯入 ${copiedStops.length} 站與收費）` : ''}`);
+    selectTripForInspector(key);
+  };
+}
+
 function renderTripInspector() {
   const titleEl = document.getElementById('inspectorTitle');
   const subEl = document.getElementById('inspectorSubtitle');
@@ -2420,21 +2830,11 @@ function renderTripInspector() {
   const trip = getAllTripEntries().find(t => t.tripKey === selectedTripKey);
   if (!trip) return;
 
+  // 草稿車站列表（修改時即時運作，按儲存或即時套用）
+  let draftStops = recalcStopSections(trip.stops.map(s => ({ ...s })));
+  let stopsModified = trip.hasCustomStops;
+
   const coverageMap = buildStopCoverageIndex();
-  const totalStops = trip.stops.length;
-  let coveredCnt = 0;
-  const stopRows = trip.stops.map((s, idx) => {
-    const st = stopById.get(s.stopId);
-    const hits = getMatchingRulesForStopOnTrip(s.stopId, trip.routeId, trip.name, coverageMap);
-    const isCovered = hits.length > 0;
-    if (isCovered) coveredCnt++;
-    return { seq: s.seq || (idx + 1), stopId: s.stopId, st, hits, isCovered };
-  });
-
-  const firstSt = totalStops > 0 ? stopById.get(trip.stops[0].stopId) : null;
-  const lastSt = totalStops > 0 ? stopById.get(trip.stops[totalStops - 1].stopId) : null;
-  const pct = totalStops > 0 ? Math.round((coveredCnt / totalStops) * 100) : 0;
-
   const matchedWelcomes = Object.values(studioDb.welcomeRules || {}).filter(w =>
     w && w.audioPath && !studioDb.ignored[w.audioPath] &&
     w.scope !== 'default' && Array.isArray(w.tripNames) && w.tripNames.includes(trip.name)
@@ -2453,46 +2853,79 @@ function renderTripInspector() {
     curVia = curLabel.slice('特別班次經'.length).trim();
   }
 
-  const cleanTitle = (trip.routeId && !trip.name.startsWith(`${trip.routeId}-`))
-    ? `${trip.routeId} ${trip.name}`
-    : trip.name;
-  titleEl.textContent = cleanTitle;
-  subEl.textContent = firstSt && lastSt
-    ? `${firstSt.nameTc} → ${lastSt.nameTc}（共 ${totalStops} 站・覆蓋 ${coveredCnt}/${totalStops}）`
-    : `班次代碼：${trip.tripKey}`;
+  const updateHeaderMeta = () => {
+    const tot = draftStops.length;
+    let cov = 0;
+    for (const s of draftStops) {
+      if (getMatchingRulesForStopOnTrip(s.stopId, trip.routeId, trip.name, coverageMap).length > 0) cov++;
+    }
+    const fSt = tot > 0 ? (stopById.get(draftStops[0].stopId) || draftStops[0].apiStopMeta) : null;
+    const lSt = tot > 0 ? (stopById.get(draftStops[tot - 1].stopId) || draftStops[tot - 1].apiStopMeta) : null;
+    const cleanTitle = (trip.routeId && !trip.name.startsWith(`${trip.routeId}-`))
+      ? `${trip.routeId} ${trip.name}`
+      : trip.name;
+    titleEl.textContent = cleanTitle;
+    subEl.textContent = fSt && lSt
+      ? `${fSt.nameTc} → ${lSt.nameTc}（共 ${tot} 站・覆蓋 ${cov}/${tot}）`
+      : `班次代碼：${trip.tripKey}（共 ${tot} 站）`;
+  };
+  updateHeaderMeta();
   qNav.classList.remove('hidden');
 
   body.innerHTML = `
-    <!-- Card 1: 選擇班次頁附加命名（原班次編號保持不變） -->
+    <!-- Card 1: 選擇班次頁附加命名與班次設定 -->
     <div class="bg-white rounded-2xl border border-[#DCE3EC] p-4 space-y-3.5">
       <div class="flex items-center justify-between gap-2">
-        <h3 class="text-sm font-black text-slate-900">選擇班次頁附加命名</h3>
-        <span class="text-[11px] font-bold text-slate-500 truncate">原班次不變：${esc(trip.defaultName)}</span>
+        <div>
+          <h3 class="text-sm font-black text-slate-900">班次設定與選擇頁命名</h3>
+          <div class="text-[11px] font-bold text-slate-500">原班次識別：${esc(trip.defaultName)}</div>
+        </div>
+        <button id="btnDeleteThisTrip" class="min-h-[34px] px-3 py-1 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-[#D0302F] text-xs font-black shrink-0">刪除班次</button>
       </div>
 
+      ${trip.isManual ? `
+        <div class="grid grid-cols-3 gap-2 text-xs">
+          <div>
+            <label class="font-bold text-slate-500 block mb-1">路線</label>
+            <input id="editTripRouteId" type="text" value="${esc(trip.routeId)}" class="w-full min-h-[38px] px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-300 font-black uppercase" />
+          </div>
+          <div>
+            <label class="font-bold text-slate-500 block mb-1">方向</label>
+            <select id="editTripBound" class="w-full min-h-[38px] px-2 py-1 rounded-xl bg-slate-50 border border-slate-300 font-black">
+              <option value="O" ${trip.bound !== 'I' ? 'selected' : ''}>去程 (O)</option>
+              <option value="I" ${trip.bound === 'I' ? 'selected' : ''}>回程 (I)</option>
+            </select>
+          </div>
+          <div>
+            <label class="font-bold text-slate-500 block mb-1">總站名</label>
+            <input id="editTripDestTc" type="text" value="${esc(trip.destTc)}" placeholder="自動跟尾站" class="w-full min-h-[38px] px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-300 font-bold" />
+          </div>
+        </div>
+      ` : ''}
+
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">
-        <button data-ttype="normal" class="trip-type-btn min-h-[42px] px-2 rounded-xl border ${curType === 'normal' ? 'bg-[#0B875B] text-white border-[#0B875B]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">正常路線</button>
-        <button data-ttype="express" class="trip-type-btn min-h-[42px] px-2 rounded-xl border ${curType === 'express' ? 'bg-[#0052CC] text-white border-[#0052CC]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">特快班次</button>
-        <button data-ttype="special_via" class="trip-type-btn min-h-[42px] px-2 rounded-xl border ${curType === 'special_via' ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">特別班次經XXX</button>
-        <button data-ttype="custom" class="trip-type-btn min-h-[42px] px-2 rounded-xl border ${curType === 'custom' ? 'bg-[#0B1622] text-white border-[#0B1622]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">自由填入</button>
+        <button data-ttype="normal" class="trip-type-btn min-h-[40px] px-2 rounded-xl border ${curType === 'normal' ? 'bg-[#0B875B] text-white border-[#0B875B]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">正常路線</button>
+        <button data-ttype="express" class="trip-type-btn min-h-[40px] px-2 rounded-xl border ${curType === 'express' ? 'bg-[#0052CC] text-white border-[#0052CC]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">特快班次</button>
+        <button data-ttype="special_via" class="trip-type-btn min-h-[40px] px-2 rounded-xl border ${curType === 'special_via' ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">特別班次經XXX</button>
+        <button data-ttype="custom" class="trip-type-btn min-h-[40px] px-2 rounded-xl border ${curType === 'custom' ? 'bg-[#0B1622] text-white border-[#0B1622]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">自由填入</button>
       </div>
 
       <div id="tripViaBox" class="${curType === 'special_via' ? '' : 'hidden'} space-y-1.5">
         <label class="block text-xs font-black text-amber-900">途經地點（XXX）：</label>
-        <input id="tripViaInput" type="text" value="${esc(curVia)}" placeholder="例如：西隧、銅鑼灣、啟德、香港大學..." class="w-full min-h-[42px] px-3 py-2 rounded-xl bg-amber-50/70 border border-amber-300 text-sm font-bold text-slate-900 focus:bg-white focus:border-amber-500" />
+        <input id="tripViaInput" type="text" value="${esc(curVia)}" placeholder="例如：西隧、銅鑼灣、啟德..." class="w-full min-h-[40px] px-3 py-1.5 rounded-xl bg-amber-50/70 border border-amber-300 text-sm font-bold text-slate-900" />
       </div>
 
-      <div class="space-y-1.5">
-        <label class="block text-xs font-black text-slate-700">顯示於報站器「選擇班次頁」嘅命名（唔會更改原班次名稱）：</label>
-        <div class="flex gap-2">
-          <input id="tripLabelInput" type="text" value="${esc(curLabel)}" placeholder="點上方快捷按鈕或自由填入（例如：正常路線、特別班次經西隧）" class="flex-1 min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-black text-slate-900 focus:bg-white focus:border-[#0052CC]" />
-          <button id="btnClearTripLabel" title="清除此班次附加命名" class="min-h-[44px] px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold shrink-0">清除</button>
+      <div class="flex gap-2">
+        <input id="tripLabelInput" type="text" value="${esc(curLabel)}" placeholder="報站器選擇班次頁顯示名稱..." class="flex-1 min-h-[42px] px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-black text-slate-900 focus:bg-white focus:border-[#0052CC]" />
+        <button id="btnClearTripLabel" class="min-h-[42px] px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold shrink-0">清除</button>
+      </div>
+
+      <div class="rounded-xl bg-[#3b3a36] text-white px-3.5 py-2 border border-slate-300 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-[10px] font-bold text-zinc-300">報站器「選擇班次頁」預覽</div>
+          <div id="tripLabelPreview" class="text-sm font-black truncate">${esc(curLabel || trip.defaultName)}</div>
         </div>
-      </div>
-
-      <div class="rounded-xl bg-[#3b3a36] text-white px-3.5 py-2.5 border border-slate-300 space-y-0.5">
-        <div class="text-[10px] font-bold text-zinc-300">報站器「選擇班次頁」預覽（只顯示班次名稱）</div>
-        <div id="tripLabelPreview" class="text-sm font-black truncate">${esc(curLabel || trip.defaultName)}</div>
+        <span class="text-zinc-400 text-lg font-black shrink-0">›</span>
       </div>
     </div>
 
@@ -2511,23 +2944,63 @@ function renderTripInspector() {
         : `<button id="btnGoWelcomeFromTrip" class="min-h-[36px] px-3 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-950 text-xs font-bold shrink-0">前往設定</button>`}
     </div>
 
-    <!-- Card 3: 班次車站列表 -->
+    <!-- Card 3: 班次車站與逐站分段收費 -->
     <div class="bg-white rounded-2xl border border-[#DCE3EC] overflow-hidden">
       <div class="p-4 border-b border-slate-200 bg-[#F8FAFC] space-y-2.5">
-        <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
           <div>
-            <h3 class="text-sm font-black text-slate-900">班次車站列表（共 ${totalStops} 站）</h3>
-            <div class="text-[11px] font-bold text-slate-500 mt-0.5">
-              已配對 ${coveredCnt} 站・<span class="${totalStops - coveredCnt > 0 ? 'text-[#D0302F]' : 'text-[#0B875B]'}">缺 ${totalStops - coveredCnt} 站</span>（${pct}%）
-            </div>
+            <h3 id="tripStopsHeading" class="text-sm font-black text-slate-900">班次車站與收費</h3>
+            <div id="tripStopsStats" class="text-[11px] font-bold text-slate-500 mt-0.5"></div>
           </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btnToggleTripEdit" class="min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-black border ${tripEditMode ? 'bg-[#0B1622] text-white border-[#0B1622]' : 'bg-blue-50 text-[#0052CC] border-blue-200 hover:bg-blue-100'}">
+              ${tripEditMode ? '完成編輯檢視' : '編輯車站／收費'}
+            </button>
+          </div>
+        </div>
+        <div class="h-2 rounded-full bg-slate-200 overflow-hidden"><div id="tripCovBar" class="h-full bg-[#0B875B]" style="width:0%"></div></div>
+
+        <!-- 編輯模式專用工具箱（匯入現有班次 + 新增 API 車站） -->
+        <div id="tripEditToolbox" class="${tripEditMode ? '' : 'hidden'} space-y-3 pt-2 border-t border-slate-200">
+          <!-- A. 新增 API 車站 -->
+          <div class="rounded-xl bg-blue-50/70 border border-blue-200 p-3 space-y-2">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <span class="text-xs font-black text-[#0052CC]">＋ 加入車站（只限城巴 API 車站）</span>
+              <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                <span>插入位置：</span>
+                <select id="tripInsertPosSel" class="px-2 py-1 rounded-lg bg-white border border-slate-300 text-[11px] font-bold"></select>
+              </div>
+            </div>
+            <div class="flex gap-1.5">
+              <input id="tripAddApiStopSearch" type="text" placeholder="搜尋 API 車站名、街道、英文名、路線或 6 位數站號..." class="flex-1 min-h-[40px] px-3 py-1.5 rounded-xl bg-white border border-blue-300 text-xs font-bold focus:border-[#0052CC]" />
+              <button id="btnQueryOfficialApiStop" title="向城巴官方 API 查詢 6 位數站號" class="min-h-[40px] px-3 rounded-xl bg-[#0052CC] text-white text-[11px] font-black shrink-0">查官方API</button>
+            </div>
+            <div id="tripAddApiStopResults" class="hidden max-h-48 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl"></div>
+          </div>
+
+          <!-- B. 從現有班次匯入車站與收費 -->
+          <div class="rounded-xl bg-amber-50/70 border border-amber-200 p-3 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-black text-amber-950">從現有班次匯入車站及收費</span>
+              ${!trip.isManual && tripCatalog.has(trip.tripKey) ? `<button id="btnResetStopsToDefault" class="text-[11px] font-black text-[#D0302F] hover:underline">還原系統原站序與收費</button>` : ''}
+            </div>
+            <input id="tripReimportSearch" type="text" placeholder="搜尋要匯入嘅班次（例如：102、A21、美孚）..." class="w-full min-h-[38px] px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-xs font-bold" />
+            <div id="tripReimportResults" class="hidden max-h-40 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-xl"></div>
+          </div>
+
+          <div class="text-[11px] font-bold text-slate-600 bg-slate-100 rounded-lg px-3 py-1.5">
+            貼士：喺下方改好任何一站收費後，點旁邊 <b>「↘ 同價」</b> 可一鍵套用到該站及之後所有車站，分段編號會自動重算。
+          </div>
+        </div>
+
+        <!-- 瀏覽模式篩選列 -->
+        <div class="flex items-center gap-2">
+          <input id="tripStopFilterInput" type="text" placeholder="搜尋此班次內車站名、街道或站號..." class="flex-1 min-h-[38px] px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold focus:border-[#0052CC]" />
           <label class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer shrink-0">
             <input id="chkTripOnlyMiss" type="checkbox" class="w-4 h-4 accent-[#D0302F]" />
             只看缺失
           </label>
         </div>
-        <div class="h-2 rounded-full bg-slate-200 overflow-hidden"><div class="h-full bg-[#0B875B]" style="width:${pct}%"></div></div>
-        <input id="tripStopFilterInput" type="text" placeholder="搜尋此班次內車站名、街道或站號..." class="w-full min-h-[40px] px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold focus:border-[#0052CC]" />
       </div>
 
       <div id="tripStopsListBox" class="route-spine py-2 divide-y divide-slate-100"></div>
@@ -2536,56 +3009,161 @@ function renderTripInspector() {
 
   footer.classList.remove('hidden');
   footer.innerHTML = `
-    <div class="text-xs font-bold text-slate-500 truncate">${esc(trip.routeId || '自訂')}・${totalStops} 站</div>
+    <div id="tripFooterSummary" class="text-xs font-bold text-slate-500 truncate"></div>
     <button id="btnSaveTripMeta" class="min-h-[44px] px-5 py-2 rounded-xl bg-[#0B875B] hover:bg-[#096E4A] text-white text-xs font-black">
-      儲存班次命名並同步
+      儲存班次設定並同步
     </button>
   `;
 
+  const syncInsertPosSelect = () => {
+    const sel = document.getElementById('tripInsertPosSel');
+    if (!sel) return;
+    const prev = sel.value;
+    let html = `<option value="end">最後（總站之後）</option><option value="0">最前（設為第 1 站）</option>`;
+    draftStops.forEach((s, i) => {
+      const st = stopById.get(s.stopId) || s.apiStopMeta;
+      html += `<option value="${i + 1}">第 ${i + 1} 站「${esc(st?.nameTc || s.stopId)}」之後</option>`;
+    });
+    sel.innerHTML = html;
+    if (prev && Array.from(sel.options).some(o => o.value === prev)) sel.value = prev;
+  };
+
   const renderStopsRows = () => {
+    draftStops = recalcStopSections(draftStops);
+    syncInsertPosSelect();
+    updateHeaderMeta();
+
+    const tot = draftStops.length;
+    let cov = 0;
+    const rows = draftStops.map((s, idx) => {
+      const st = stopById.get(s.stopId) || s.apiStopMeta || null;
+      const hits = getMatchingRulesForStopOnTrip(s.stopId, trip.routeId, trip.name, coverageMap);
+      const isCovered = hits.length > 0;
+      if (isCovered) cov++;
+      const prevSec = idx > 0 ? draftStops[idx - 1].section : s.section;
+      const isSecChange = idx > 0 && s.section !== prevSec;
+      return { idx, seq: idx + 1, stopId: s.stopId, st, hits, isCovered, sectionFare: s.sectionFare, section: s.section, isSecChange };
+    });
+
+    const pct = tot > 0 ? Math.round((cov / tot) * 100) : 0;
+    const headEl = document.getElementById('tripStopsHeading');
+    const statEl = document.getElementById('tripStopsStats');
+    const barEl = document.getElementById('tripCovBar');
+    const footEl = document.getElementById('tripFooterSummary');
+    if (headEl) headEl.textContent = `班次車站與收費（共 ${tot} 站）`;
+    const fullFareTxt = (tot > 0 && draftStops[0].sectionFare != null) ? `・全程 $${Number(draftStops[0].sectionFare).toFixed(1)}` : '';
+    if (statEl) statEl.innerHTML = `已配對 ${cov} 站・<span class="${tot - cov > 0 ? 'text-[#D0302F]' : 'text-[#0B875B]'}">缺 ${tot - cov} 站</span>（${pct}%）${fullFareTxt}`;
+    if (barEl) barEl.style.width = `${pct}%`;
+    if (footEl) footEl.textContent = `${trip.routeId || '自訂'}・${tot} 站${fullFareTxt}${stopsModified ? '・有修改' : ''}`;
+
     const q = (document.getElementById('tripStopFilterInput')?.value || '').trim().toLowerCase();
     const onlyMiss = Boolean(document.getElementById('chkTripOnlyMiss')?.checked);
     const box = document.getElementById('tripStopsListBox');
     if (!box) return;
 
-    if (!totalStops) {
-      box.innerHTML = `<div class="py-12 px-4 text-center text-xs font-bold text-slate-400">此班次為手動自訂班次，暫無內建站序資料。</div>`;
+    if (!tot) {
+      box.innerHTML = `<div class="py-12 px-4 text-center text-xs font-bold text-slate-400">此班次尚未有任何車站，請開啟「編輯車站／收費」匯入班次或加入 API 車站。</div>`;
       return;
     }
 
-    const filtered = stopRows.filter(item => {
+    const filtered = rows.filter(item => {
       if (onlyMiss && item.isCovered) return false;
       if (!q) return true;
       return `${item.seq} ${item.stopId} ${item.st?.numId || ''} ${item.st?.nameTc || ''} ${item.st?.subTc || ''} ${item.st?.nameEn || ''}`.toLowerCase().includes(q);
     });
 
     box.innerHTML = filtered.length ? filtered.map(item => `
-      <div class="relative pl-12 pr-3.5 py-3 flex items-center justify-between gap-2.5 hover:bg-slate-50">
-        <span class="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 ${item.isCovered ? 'bg-[#0B875B] border-[#0B875B]' : 'bg-white border-[#D0302F]'}"></span>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <span class="text-xs font-black text-slate-400 w-6 shrink-0">${item.seq}.</span>
-            <span class="text-[13px] font-black text-slate-900">${esc(item.st?.nameTc || item.stopId)}</span>
-            ${item.st?.subTc ? `<span class="text-[11px] font-semibold text-slate-500">, ${esc(item.st.subTc)}</span>` : ''}
-            <span class="text-[11px] font-bold text-slate-400">#${esc(item.st?.numId || item.stopId)}</span>
+      <div class="relative pl-12 pr-3.5 py-3 flex flex-col gap-2 hover:bg-slate-50 ${item.isSecChange ? 'bg-amber-50/40' : ''}">
+        <span class="absolute left-4 top-5 w-3.5 h-3.5 rounded-full border-2 ${item.isCovered ? 'bg-[#0B875B] border-[#0B875B]' : 'bg-white border-[#D0302F]'}"></span>
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-xs font-black text-slate-400 w-6 shrink-0">${item.seq}.</span>
+              <span class="text-[13px] font-black text-slate-900">${esc(item.st?.nameTc || item.stopId)}</span>
+              ${item.st?.subTc ? `<span class="text-[11px] font-semibold text-slate-500">, ${esc(item.st.subTc)}</span>` : ''}
+              <span class="text-[11px] font-bold text-slate-400">#${esc(item.st?.numId || item.stopId)}</span>
+              ${!tripEditMode && item.sectionFare != null ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-black ${item.isSecChange ? 'bg-amber-200 text-amber-950' : 'bg-slate-100 text-slate-700'}">$${Number(item.sectionFare).toFixed(1)}${item.isSecChange ? ` 分段${item.section}` : ''}</span>` : ''}
+            </div>
+            ${item.st?.nameEn ? `<div class="pl-7 text-[11px] text-slate-500 truncate">${esc(item.st.nameEn)}</div>` : ''}
+            ${!tripEditMode ? `
+              <div class="pl-7 mt-1 flex flex-wrap items-center gap-1.5">
+                ${item.isCovered
+                  ? item.hits.map(h => `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">${esc(h.audioPath.split('/').pop())}</span>`).join('')
+                  : `<span class="text-[11px] font-bold text-[#D0302F]">未有報站音檔</span>`}
+              </div>
+            ` : ''}
           </div>
-          ${item.st?.nameEn ? `<div class="pl-7 text-[11px] text-slate-500 truncate">${esc(item.st.nameEn)}</div>` : ''}
-          <div class="pl-7 mt-1 flex flex-wrap items-center gap-1.5">
-            ${item.isCovered
-              ? item.hits.map(h => `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">${esc(h.audioPath.split('/').pop())}</span>`).join('')
-              : `<span class="text-[11px] font-bold text-[#D0302F]">未有報站音檔</span>`}
+          ${!tripEditMode ? `
+            <div class="flex items-center gap-1.5 shrink-0">
+              ${item.isCovered ? `<button data-play-btn="${esc(item.hits[0].audioPath)}" class="min-h-[34px] px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold">試聽</button>` : ''}
+              <button data-trip-assign-stop="${esc(item.stopId)}" class="min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-bold ${item.isCovered ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-[#0052CC] text-white hover:bg-[#0041A3]'}">${item.isCovered ? '增補' : '指派'}</button>
+            </div>
+          ` : `
+            <div class="flex items-center gap-1 shrink-0">
+              <button data-move-up="${item.idx}" ${item.idx === 0 ? 'disabled' : ''} class="w-8 h-8 rounded-lg border border-slate-300 bg-white text-xs font-black disabled:opacity-30">↑</button>
+              <button data-move-down="${item.idx}" ${item.idx === tot - 1 ? 'disabled' : ''} class="w-8 h-8 rounded-lg border border-slate-300 bg-white text-xs font-black disabled:opacity-30">↓</button>
+              <button data-del-stop-idx="${item.idx}" class="w-8 h-8 rounded-lg border border-red-200 bg-red-50 text-[#D0302F] text-xs font-black">✕</button>
+            </div>
+          `}
+        </div>
+
+        ${tripEditMode ? `
+          <div class="pl-7 flex items-center gap-2 flex-wrap">
+            <div class="inline-flex items-center gap-1 bg-slate-100 border border-slate-300 rounded-lg px-2 py-1">
+              <span class="text-[11px] font-black text-slate-600">收費 $</span>
+              <input data-fare-idx="${item.idx}" type="number" step="0.1" min="0" value="${item.sectionFare != null ? item.sectionFare : ''}" placeholder="如 4.8" class="w-16 bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs font-black text-slate-900" />
+            </div>
+            <button data-cascade-fare="${item.idx}" title="將此站收費套用到此站及之後所有車站" class="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#0052CC] text-[11px] font-black">↘ 同價</button>
+            <span class="px-2 py-0.5 rounded-md text-[10px] font-black ${item.isSecChange ? 'bg-amber-200 text-amber-950' : 'bg-slate-100 text-slate-600'}">分段 ${item.section}${item.isSecChange ? '（轉分段）' : ''}</span>
           </div>
-        </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          ${item.isCovered ? `<button data-play-btn="${esc(item.hits[0].audioPath)}" class="min-h-[34px] px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold">試聽</button>` : ''}
-          <button data-trip-assign-stop="${esc(item.stopId)}" class="min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-bold ${item.isCovered ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-[#0052CC] text-white hover:bg-[#0041A3]'}">${item.isCovered ? '增補' : '指派'}</button>
-        </div>
+        ` : ''}
       </div>
     `).join('') : `<div class="py-12 text-center text-xs font-bold text-emerald-700">${onlyMiss ? '此班次全部車站都已有音檔！' : '找不到符合關鍵字的車站'}</div>`;
 
     box.querySelectorAll('[data-play-btn]').forEach(b => b.onclick = () => togglePlayAudio(b.dataset.playBtn));
-    box.querySelectorAll('[data-trip-assign-stop]').forEach(b => b.onclick = () => {
-      selectMissingStopForInspector(b.dataset.tripAssignStop, trip);
+    box.querySelectorAll('[data-trip-assign-stop]').forEach(b => b.onclick = () => selectMissingStopForInspector(b.dataset.tripAssignStop, trip));
+
+    box.querySelectorAll('[data-move-up]').forEach(b => b.onclick = () => {
+      const i = Number(b.dataset.moveUp);
+      if (i > 0) {
+        [draftStops[i - 1], draftStops[i]] = [draftStops[i], draftStops[i - 1]];
+        stopsModified = true;
+        renderStopsRows();
+      }
+    });
+    box.querySelectorAll('[data-move-down]').forEach(b => b.onclick = () => {
+      const i = Number(b.dataset.moveDown);
+      if (i < draftStops.length - 1) {
+        [draftStops[i], draftStops[i + 1]] = [draftStops[i + 1], draftStops[i]];
+        stopsModified = true;
+        renderStopsRows();
+      }
+    });
+    box.querySelectorAll('[data-del-stop-idx]').forEach(b => b.onclick = () => {
+      const i = Number(b.dataset.delStopIdx);
+      draftStops.splice(i, 1);
+      stopsModified = true;
+      renderStopsRows();
+    });
+    box.querySelectorAll('[data-fare-idx]').forEach(inp => {
+      inp.onchange = () => {
+        const i = Number(inp.dataset.fareIdx);
+        const v = inp.value.trim();
+        draftStops[i].sectionFare = (v !== '' && Number.isFinite(Number(v))) ? Math.round(Number(v) * 10) / 10 : null;
+        stopsModified = true;
+        renderStopsRows();
+      };
+    });
+    box.querySelectorAll('[data-cascade-fare]').forEach(b => b.onclick = () => {
+      const i = Number(b.dataset.cascadeFare);
+      const inp = box.querySelector(`[data-fare-idx="${i}"]`);
+      const v = inp ? inp.value.trim() : '';
+      if (v === '' || !Number.isFinite(Number(v))) { showToast('請先喺呢個站輸入收費金額'); return; }
+      const num = Math.round(Number(v) * 10) / 10;
+      for (let j = i; j < draftStops.length; j++) draftStops[j].sectionFare = num;
+      stopsModified = true;
+      showToast(`已將 $${num.toFixed(1)} 套用至第 ${i + 1} 至 ${draftStops.length} 站`);
+      renderStopsRows();
     });
     syncPlayerUi();
   };
@@ -2594,17 +3172,128 @@ function renderTripInspector() {
   document.getElementById('tripStopFilterInput').oninput = renderStopsRows;
   document.getElementById('chkTripOnlyMiss').onchange = renderStopsRows;
 
+  // 切換編輯車站/收費模式
+  document.getElementById('btnToggleTripEdit').onclick = () => {
+    tripEditMode = !tripEditMode;
+    document.getElementById('tripEditToolbox').classList.toggle('hidden', !tripEditMode);
+    const btn = document.getElementById('btnToggleTripEdit');
+    btn.textContent = tripEditMode ? '完成編輯檢視' : '編輯車站／收費';
+    btn.className = `min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-black border ${tripEditMode ? 'bg-[#0B1622] text-white border-[#0B1622]' : 'bg-blue-50 text-[#0052CC] border-blue-200 hover:bg-blue-100'}`;
+    renderStopsRows();
+  };
+
+  // 加入 API 車站（嚴格限 API 車站）
+  const addStopInp = document.getElementById('tripAddApiStopSearch');
+  const addStopRes = document.getElementById('tripAddApiStopResults');
+  const insertApiStop = (st) => {
+    const posVal = document.getElementById('tripInsertPosSel')?.value || 'end';
+    const insertIdx = posVal === 'end' ? draftStops.length : Math.max(0, Math.min(draftStops.length, Number(posVal)));
+    const inheritFare = insertIdx > 0
+      ? (draftStops[insertIdx - 1]?.sectionFare ?? null)
+      : (draftStops[0]?.sectionFare ?? trip.fullFare ?? null);
+    const entry = { seq: insertIdx + 1, stopId: st.stopId, sectionFare: inheritFare, section: 1 };
+    if (!st.routes || st.routes.length === 0) {
+      entry.apiStopMeta = { stopId: st.stopId, numId: st.numId, nameTc: st.nameTc, subTc: st.subTc || '', nameEn: st.nameEn || '', nameSc: st.nameSc || '', lat: st.lat ?? null, lng: st.lng ?? null };
+    }
+    draftStops.splice(insertIdx, 0, entry);
+    stopsModified = true;
+    addStopInp.value = '';
+    addStopRes.classList.add('hidden');
+    showToast(`已加入 API 車站：${formatStopFullTc(st)} (#${st.numId})`);
+    renderStopsRows();
+  };
+
+  addStopInp.oninput = () => {
+    const q = addStopInp.value.trim().toLowerCase();
+    if (!q) { addStopRes.classList.add('hidden'); return; }
+    const hits = allStops.filter(st =>
+      st.nameTc.toLowerCase().includes(q) || st.subTc.toLowerCase().includes(q) ||
+      st.nameEn.toLowerCase().includes(q) || st.numId.includes(q) || st.stopId.toLowerCase().includes(q) ||
+      (st.routes || []).some(r => r.toLowerCase().includes(q))
+    ).slice(0, 30);
+    addStopRes.classList.remove('hidden');
+    addStopRes.innerHTML = hits.length ? hits.map(st => `
+      <button type="button" data-pick-api-stop="${esc(st.stopId)}" class="w-full min-h-[46px] px-3 py-2 text-left hover:bg-blue-50 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-xs font-black text-slate-900 truncate">${esc(formatStopFullTc(st))} <span class="text-[#0052CC]">#${esc(st.numId)}</span></div>
+          <div class="text-[11px] text-slate-500 truncate">${esc(st.nameEn || '')}${st.routes?.length ? `・${esc(st.routes.slice(0, 6).join('/'))}` : ''}</div>
+        </div>
+        <span class="px-2.5 py-1 rounded-lg bg-[#0052CC] text-white text-xs font-bold shrink-0">加入</span>
+      </button>
+    `).join('') : `<div class="p-3 text-center text-xs text-slate-500 font-bold">本地清單找不到，如屬城巴官方 6 位數站號請按右上「查官方API」驗證加入。</div>`;
+
+    addStopRes.querySelectorAll('[data-pick-api-stop]').forEach(b => {
+      b.onclick = () => {
+        const st = stopById.get(b.dataset.pickApiStop);
+        if (st) insertApiStop(st);
+      };
+    });
+  };
+
+  document.getElementById('btnQueryOfficialApiStop').onclick = async () => {
+    const q = addStopInp.value.trim();
+    if (!/^\d{1,6}$/.test(q)) { showToast('請輸入數字站號（如 001001 或 1001）再查官方 API'); return; }
+    showToast('正在向城巴官方 API 驗證站號...');
+    const st = await lookupOfficialCtbApiStop(q);
+    if (!st) { showToast('官方城巴 API 找不到此站號，無法加入非 API 車站'); return; }
+    insertApiStop(st);
+  };
+
+  // 從現有班次重新匯入車站與收費
+  const reimpInp = document.getElementById('tripReimportSearch');
+  const reimpRes = document.getElementById('tripReimportResults');
+  reimpInp.oninput = () => {
+    const q = reimpInp.value.trim().toLowerCase();
+    if (!q) { reimpRes.classList.add('hidden'); return; }
+    const hits = getAllTripEntries().filter(t => t.tripKey !== trip.tripKey && `${t.routeId} ${t.name} ${t.destTc} ${t.tripLabel}`.toLowerCase().includes(q)).slice(0, 25);
+    reimpRes.classList.remove('hidden');
+    reimpRes.innerHTML = hits.length ? hits.map(t => `
+      <button type="button" data-reimp-key="${esc(t.tripKey)}" class="w-full px-3 py-2 text-left hover:bg-amber-50 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-xs font-black text-slate-900 truncate">${esc(t.name)} ${t.tripLabel ? `(${esc(t.tripLabel)})` : ''}</div>
+          <div class="text-[11px] text-slate-500">${t.stops.length} 站・${t.fullFare != null ? `$${Number(t.fullFare).toFixed(1)}` : '未設價'}</div>
+        </div>
+        <span class="px-2 py-1 rounded-lg bg-amber-500 text-white text-[11px] font-black shrink-0">匯入</span>
+      </button>
+    `).join('') : `<div class="p-3 text-center text-xs text-slate-400">找不到符合的班次</div>`;
+
+    reimpRes.querySelectorAll('[data-reimp-key]').forEach(b => {
+      b.onclick = () => {
+        const src = getAllTripEntries().find(x => x.tripKey === b.dataset.reimpKey);
+        if (!src) return;
+        if (draftStops.length && !confirm(`確定要用「${src.name}」嘅 ${src.stops.length} 個車站及收費覆蓋目前站序？`)) return;
+        draftStops = recalcStopSections(src.stops.map(s => ({ ...s })));
+        stopsModified = true;
+        reimpInp.value = '';
+        reimpRes.classList.add('hidden');
+        showToast(`已匯入「${src.name}」共 ${draftStops.length} 站及收費（記得按儲存）`);
+        renderStopsRows();
+      };
+    });
+  };
+
+  const btnResetDef = document.getElementById('btnResetStopsToDefault');
+  if (btnResetDef) {
+    btnResetDef.onclick = () => {
+      const base = tripCatalog.get(trip.tripKey);
+      if (!base) return;
+      if (!confirm('確定要還原此班次嘅系統原始站序與收費？')) return;
+      draftStops = recalcStopSections(base.stops.map(s => ({ ...s })));
+      stopsModified = false;
+      showToast('已還原系統原始站序與收費（按儲存生效）');
+      renderStopsRows();
+    };
+  }
+
+  document.getElementById('btnDeleteThisTrip').onclick = () => deleteTripByKey(trip.tripKey);
+
   const btnWel = document.getElementById('btnGoWelcomeFromTrip');
   if (btnWel) {
-    btnWel.onclick = () => {
-      activeNav = 'welcome';
-      syncNavAndPillsUi();
-      renderMainList();
-      closeMobileInspector();
-    };
+    btnWel.onclick = () => { activeNav = 'welcome'; syncNavAndPillsUi(); renderMainList(); closeMobileInspector(); };
   }
   body.querySelectorAll('[data-play-btn]').forEach(b => b.onclick = () => togglePlayAudio(b.dataset.playBtn));
 
+  // 命名按鈕互動
   const labelInp = document.getElementById('tripLabelInput');
   const viaBox = document.getElementById('tripViaBox');
   const viaInp = document.getElementById('tripViaInput');
@@ -2614,31 +3303,25 @@ function renderTripInspector() {
     const val = (labelInp.value || '').trim();
     previewEl.textContent = val || trip.defaultName;
   };
-
   const updateTypeUi = () => {
     body.querySelectorAll('.trip-type-btn').forEach(btn => {
       const t = btn.dataset.ttype;
       const active = t === curType;
-      let cls = 'trip-type-btn min-h-[42px] px-2 rounded-xl border ';
+      let cls = 'trip-type-btn min-h-[40px] px-2 rounded-xl border ';
       if (active) {
         if (t === 'normal') cls += 'bg-[#0B875B] text-white border-[#0B875B]';
         else if (t === 'express') cls += 'bg-[#0052CC] text-white border-[#0052CC]';
         else if (t === 'special_via') cls += 'bg-amber-500 text-white border-amber-500';
         else cls += 'bg-[#0B1622] text-white border-[#0B1622]';
-      } else {
-        cls += 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
-      }
+      } else cls += 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
       btn.className = cls;
     });
     viaBox.classList.toggle('hidden', curType !== 'special_via');
   };
-
   const applyPresetLabel = () => {
-    if (curType === 'normal') {
-      labelInp.value = '正常路線';
-    } else if (curType === 'express') {
-      labelInp.value = '特快班次';
-    } else if (curType === 'special_via') {
+    if (curType === 'normal') labelInp.value = '正常路線';
+    else if (curType === 'express') labelInp.value = '特快班次';
+    else if (curType === 'special_via') {
       const v = (viaInp.value || '').trim().replace(/^經/, '');
       labelInp.value = v ? `特別班次經${v}` : '特別班次經';
     }
@@ -2649,71 +3332,72 @@ function renderTripInspector() {
     btn.onclick = () => {
       curType = btn.dataset.ttype;
       updateTypeUi();
-      if (curType === 'custom') {
-        labelInp.focus();
-        labelInp.select();
-      } else {
-        applyPresetLabel();
-        if (curType === 'special_via') viaInp.focus();
-      }
+      if (curType === 'custom') { labelInp.focus(); labelInp.select(); }
+      else { applyPresetLabel(); if (curType === 'special_via') viaInp.focus(); }
     };
   });
-
-  viaInp.oninput = () => {
-    curVia = viaInp.value.trim().replace(/^經/, '');
-    if (curType === 'special_via') applyPresetLabel();
-  };
-
+  viaInp.oninput = () => { curVia = viaInp.value.trim().replace(/^經/, ''); if (curType === 'special_via') applyPresetLabel(); };
   labelInp.oninput = syncPreview;
-
   document.getElementById('btnClearTripLabel').onclick = () => {
-    curType = 'custom';
-    curVia = '';
-    viaInp.value = '';
-    labelInp.value = '';
-    updateTypeUi();
-    syncPreview();
+    curType = 'custom'; curVia = ''; viaInp.value = ''; labelInp.value = '';
+    updateTypeUi(); syncPreview();
   };
 
-  const saveTripNaming = () => {
+  const saveTripAll = () => {
     const newLabel = (labelInp.value || '').trim();
     const viaClean = curType === 'special_via' ? (viaInp.value || '').trim().replace(/^經/, '') : '';
     const base = tripCatalog.get(trip.tripKey);
+    const cleanedStops = recalcStopSections(draftStops);
+    const firstSt = cleanedStops.length ? (stopById.get(cleanedStops[0].stopId) || cleanedStops[0].apiStopMeta) : null;
+    const lastSt = cleanedStops.length ? (stopById.get(cleanedStops[cleanedStops.length - 1].stopId) || cleanedStops[cleanedStops.length - 1].apiStopMeta) : null;
+    const finalFare = cleanedStops.length && cleanedStops[0].sectionFare != null ? cleanedStops[0].sectionFare : (base?.fullFare ?? trip.fullFare ?? null);
 
-    if (!newLabel && base) {
+    if (!newLabel && !stopsModified && base) {
       delete studioDb.customTrips[trip.tripKey];
       syncAtomicRecord('customTrips', trip.tripKey, null);
-      showToast('已清除此班次附加命名');
+      showToast('已恢復系統預設班次資料');
       renderMainList();
       renderTripInspector();
       return;
     }
+
+    const editedRoute = trip.isManual ? (document.getElementById('editTripRouteId')?.value.trim().toUpperCase() || trip.routeId) : (base?.routeId || trip.routeId);
+    const editedBound = trip.isManual ? (document.getElementById('editTripBound')?.value || trip.bound) : (base?.bound || trip.bound);
+    const editedDest = trip.isManual
+      ? (document.getElementById('editTripDestTc')?.value.trim() || lastSt?.nameTc || trip.destTc)
+      : (stopsModified && lastSt?.nameTc ? lastSt.nameTc : (base?.destTc || trip.destTc));
 
     const rec = {
       tripKey: trip.tripKey,
       name: base?.defaultName || trip.defaultName || trip.name,
       defaultName: base?.defaultName || trip.defaultName || trip.name,
       tripLabel: newLabel,
-      routeId: base?.routeId || trip.routeId || '',
-      bound: base?.bound || trip.bound || 'O',
+      routeId: editedRoute,
+      bound: editedBound,
       serviceType: base?.serviceType || trip.serviceType || '1',
-      destTc: base?.destTc || trip.destTc || '',
+      destTc: editedDest,
+      origTc: firstSt?.nameTc || base?.origTc || trip.origTc || '',
+      fullFare: finalFare,
       tripType: curType,
       viaText: viaClean,
       isManual: !base,
+      deleted: false,
       updatedAt: new Date().toISOString(),
       updatedBy: getMyName()
     };
+    if (stopsModified || !base) {
+      rec.customStops = cleanedStops;
+    }
     studioDb.customTrips[trip.tripKey] = rec;
     syncAtomicRecord('customTrips', trip.tripKey, rec);
 
-    showToast(newLabel ? `已儲存選擇班次頁命名：${newLabel}` : '已更新班次資料');
+    showToast(`已儲存並同步（${cleanedStops.length} 站${finalFare != null ? `・全程 $${Number(finalFare).toFixed(1)}` : ''}）`);
     renderMainList();
     renderTripInspector();
   };
 
-  document.getElementById('btnSaveTripMeta').onclick = saveTripNaming;
-  labelInp.onkeydown = (e) => { if (e.key === 'Enter') saveTripNaming(); };
+  document.getElementById('btnSaveTripMeta').onclick = saveTripAll;
+  labelInp.onkeydown = (e) => { if (e.key === 'Enter') saveTripAll(); };
   syncPlayerUi();
 }
 
@@ -2931,17 +3615,25 @@ function buildExportPayload() {
     if (!c) continue;
     const base = tripCatalog.get(k);
     const lbl = getTripLabel(k);
-    tripNames[k] = {
+    const cleanStops = c.customStops != null ? recalcStopSections(normalizeTripStopsArray(c.customStops)) : null;
+    const entry = {
       ...c,
       tripKey: k,
       name: base?.defaultName || c.defaultName || c.name || k,
       defaultName: base?.defaultName || c.defaultName || c.name || k,
       tripLabel: lbl,
-      routeId: base?.routeId || c.routeId || '',
-      bound: base?.bound || c.bound || 'O',
+      routeId: String(base?.routeId || c.routeId || '').toUpperCase(),
+      bound: String(base?.bound || c.bound || 'O').toUpperCase(),
       serviceType: base?.serviceType || c.serviceType || '1',
-      destTc: base?.destTc || c.destTc || ''
+      destTc: c.destTc || base?.destTc || '',
+      origTc: c.origTc || base?.origTc || '',
+      fullFare: (cleanStops && cleanStops.length && cleanStops[0].sectionFare != null) ? cleanStops[0].sectionFare : (c.fullFare ?? base?.fullFare ?? null),
+      isManual: !base,
+      deleted: Boolean(c.deleted)
     };
+    if (cleanStops) entry.customStops = cleanStops;
+    else delete entry.customStops;
+    tripNames[k] = entry;
   }
 
   return {
@@ -3050,11 +3742,11 @@ async function loadRemoteData() {
   if (container) container.innerHTML = `<div class="py-20 text-center text-xs font-bold text-slate-400">正在載入遠端音檔清單與車站資料...</div>`;
 
   const ts = Date.now();
-  const [manifestData, stopsData, mapData, tripsData] = await Promise.all([
+  const [manifestData, stopsData, mapData, routesData] = await Promise.all([
     safeFetchJson(`${getAudioBase()}/audio_manifest.json?v=${ts}`),
     safeFetchJson(`${getWebDataBase()}/stops.json?v=${ts}`),
     safeFetchJson(`${getWebDataBase()}/audio_mapping.json?v=${ts}`),
-    safeFetchJson(`${getWebDataBase()}/trips.json?v=${ts}`)
+    safeFetchJson(`${getWebDataBase()}/routes.json?v=${ts}`)
   ]);
 
   const remoteList = Array.isArray(manifestData) ? manifestData.map(x => String(x).replace(/\\/g, '/')) : [];
@@ -3064,14 +3756,19 @@ async function loadRemoteData() {
   const routeSet = new Set();
 
   const tripMetaByKey = new Map();
-  if (Array.isArray(tripsData)) {
-    for (const t of tripsData) {
-      const rId = String(t.routeId || t.route || '').replace(/^CTB-/i, '').toUpperCase();
+  if (Array.isArray(routesData)) {
+    for (const t of routesData) {
+      const rId = String(t.externalRouteNo || t.routeId || t.route || '').replace(/^CTB-/i, '').toUpperCase();
       const bnd = String(t.bound || t.dir || 'O').toUpperCase();
       const stype = String(t.serviceType || t.service_type || '1');
       const key = `${rId}|${bnd}|${stype}`;
-      const label = String(t.tripName || t.name || t.label || '').trim() || (t.destTc ? `${rId}-${cleanJoint(t.destTc)}-${stype}` : `${rId}-${bnd}-${stype}`);
-      tripMetaByKey.set(key, { label, destTc: cleanJoint(t.destTc || '') });
+      const destTc = cleanJoint(t.destTc || t.endStopNameTc || '');
+      const origTc = cleanJoint(t.startStopNameTc || t.origTc || '');
+      const fullFare = (t.fullFare != null && Number.isFinite(Number(t.fullFare))) ? Number(t.fullFare) : null;
+      const label = destTc ? `${rId}-${destTc}-${stype}` : `${rId}-${bnd === 'I' ? '回程' : '去程'}-${stype}`;
+      if (!tripMetaByKey.has(key)) {
+        tripMetaByKey.set(key, { label, destTc, origTc, fullFare, patternId: t.patternId || '' });
+      }
     }
   }
 
@@ -3088,8 +3785,13 @@ async function loadRemoteData() {
     if (!stopById.has(sid)) {
       const tc = cleanJoint(row.nameTc || '');
       const en = cleanJoint(row.nameEn || '');
-      const subTc = cleanJoint(row.roadTc || row.locationTc || row.subTc || '');
-      stopById.set(sid, { stopId: sid, numId, nameTc: tc, subTc, nameEn: en, normTc: normText(tc), routesSet: new Set() });
+      const sc = cleanJoint(row.nameSc || '');
+      const subTc = cleanJoint(row.roadTc || row.locationTc || row.subTc || row.subNameTc || '');
+      stopById.set(sid, {
+        stopId: sid, numId, nameTc: tc, subTc, nameEn: en, nameSc: sc,
+        lat: row.lat ?? null, lng: row.lng ?? null,
+        normTc: normText(tc), routesSet: new Set()
+      });
     }
     if (rId) stopById.get(sid).routesSet.add(rId);
 
@@ -3100,15 +3802,28 @@ async function loadRemoteData() {
         const explicitName = String(row.tripName || row.trip_name || row.serviceName || '').trim();
         const destTc = cleanJoint(row.destTc || row.dest_tc || meta?.destTc || '');
         const defaultName = explicitName || meta?.label || (destTc ? `${rId}-${destTc}-${stype}` : `${rId}-${bnd === 'I' ? '回程' : '去程'}-${stype}`);
-        tripCatalog.set(tKey, { tripKey: tKey, routeId: rId, bound: bnd, serviceType: stype, defaultName, destTc, stops: [] });
+        tripCatalog.set(tKey, {
+          tripKey: tKey, routeId: rId, bound: bnd, serviceType: stype,
+          defaultName, destTc, origTc: meta?.origTc || '',
+          fullFare: meta?.fullFare ?? null, patternId: meta?.patternId || '',
+          stops: []
+        });
       }
-      tripCatalog.get(tKey).stops.push({ seq, stopId: sid });
+      const sFare = (row.sectionFare != null && row.sectionFare !== '' && Number.isFinite(Number(row.sectionFare)))
+        ? Number(row.sectionFare)
+        : null;
+      const sSec = (row.section != null && row.section !== '' && Number.isFinite(Number(row.section)))
+        ? Number(row.section)
+        : null;
+      tripCatalog.get(tKey).stops.push({ seq, stopId: sid, sectionFare: sFare, section: sSec });
     }
   }
 
   allStops = Array.from(stopById.values()).map(v => {
     const st = {
-      stopId: v.stopId, numId: v.numId, nameTc: v.nameTc, subTc: v.subTc, nameEn: v.nameEn, normTc: v.normTc,
+      stopId: v.stopId, numId: v.numId, nameTc: v.nameTc, subTc: v.subTc,
+      nameEn: v.nameEn, nameSc: v.nameSc || '', lat: v.lat ?? null, lng: v.lng ?? null,
+      normTc: v.normTc,
       routes: Array.from(v.routesSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     };
     stopById.set(st.stopId, st);
