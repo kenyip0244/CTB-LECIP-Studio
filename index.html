@@ -1003,10 +1003,25 @@ async function shareInviteLink() {
 
 // ---------- Data Helpers & Smart Filename Suggestions ----------
 function getTripDisplayName(tripKey) {
-  const custom = studioDb.customTrips[tripKey];
-  if (custom && custom.name) return custom.name;
   const base = tripCatalog.get(tripKey);
-  return base ? base.defaultName : tripKey;
+  if (base) return base.defaultName;
+  const custom = studioDb.customTrips[tripKey];
+  return (custom && custom.name) ? custom.name : tripKey;
+}
+
+function getTripLabel(tripKey) {
+  const c = studioDb.customTrips?.[tripKey];
+  if (!c) return '';
+  if (typeof c.tripLabel === 'string' && c.tripLabel.trim()) return c.tripLabel.trim();
+  if (c.tripType === 'normal') return '正常路線';
+  if (c.tripType === 'express') return '特快班次';
+  if (c.tripType === 'special_via') return c.viaText ? `特別班次經${c.viaText}` : '特別班次';
+  const base = tripCatalog.get(tripKey);
+  if (c.name && base && c.name !== base.defaultName) {
+    const pfx = `${base.routeId}-${base.destTc || ''}-`;
+    return c.name.startsWith(pfx) ? c.name.slice(pfx.length).trim() : c.name.trim();
+  }
+  return '';
 }
 
 function getAllTripEntries() {
@@ -1015,8 +1030,9 @@ function getAllTripEntries() {
     const c = studioDb.customTrips?.[k];
     map.set(k, {
       tripKey: k, routeId: v.routeId, bound: v.bound, serviceType: v.serviceType,
-      name: getTripDisplayName(k), defaultName: v.defaultName, destTc: v.destTc || '',
+      name: v.defaultName, defaultName: v.defaultName, destTc: v.destTc || '',
       stops: v.stops, isManual: false,
+      tripLabel: getTripLabel(k),
       tripType: c?.tripType || '', viaText: c?.viaText || ''
     });
   }
@@ -1024,8 +1040,9 @@ function getAllTripEntries() {
     if (!map.has(k)) {
       map.set(k, {
         tripKey: k, routeId: c.routeId || '', bound: c.bound || 'O', serviceType: c.serviceType || '1',
-        name: c.name || k, defaultName: c.name || k, destTc: c.destTc || '',
+        name: c.name || k, defaultName: c.defaultName || c.name || k, destTc: c.destTc || '',
         stops: [], isManual: true,
+        tripLabel: getTripLabel(k),
         tripType: c.tripType || '', viaText: c.viaText || ''
       });
     }
@@ -1037,11 +1054,12 @@ function getAllTripEntries() {
 }
 
 function getTripTypeBadgeHtml(t) {
-  if (t.tripType === 'normal') return `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">正常路線</span>`;
-  if (t.tripType === 'express') return `<span class="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-[#0052CC] text-[10px] font-bold">特快班次</span>`;
-  if (t.tripType === 'special_via') return `<span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[10px] font-bold">特別班次${t.viaText ? `經${esc(t.viaText)}` : ''}</span>`;
-  if (t.tripType === 'custom') return `<span class="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-800 text-[10px] font-bold">自訂命名</span>`;
-  return '';
+  const lbl = (t.tripLabel || '').trim();
+  if (!lbl) return '';
+  if (t.tripType === 'normal') return `<span class="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">${esc(lbl)}</span>`;
+  if (t.tripType === 'express') return `<span class="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-[#0052CC] text-[10px] font-bold">${esc(lbl)}</span>`;
+  if (t.tripType === 'special_via') return `<span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[10px] font-bold">${esc(lbl)}</span>`;
+  return `<span class="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-800 text-[10px] font-bold">${esc(lbl)}</span>`;
 }
 
 function buildStopCoverageIndex() {
@@ -1468,7 +1486,7 @@ function renderMainList() {
     const trips = getAllTripEntries().filter(t => {
       if (!kw) return true;
       const stopHay = t.stops.slice(0, 60).map(s => stopById.get(s.stopId)?.nameTc || '').join(' ');
-      return `${t.routeId} ${t.name} ${t.defaultName} ${t.viaText || ''} ${t.tripKey} ${stopHay}`.toLowerCase().includes(kw);
+      return `${t.routeId} ${t.name} ${t.defaultName} ${t.tripLabel || ''} ${t.viaText || ''} ${t.tripKey} ${stopHay}`.toLowerCase().includes(kw);
     });
     currentFilteredTripKeys = trips.map(t => t.tripKey);
 
@@ -2415,40 +2433,41 @@ function renderTripInspector() {
 
   const firstSt = totalStops > 0 ? stopById.get(trip.stops[0].stopId) : null;
   const lastSt = totalStops > 0 ? stopById.get(trip.stops[totalStops - 1].stopId) : null;
-  const destName = trip.destTc || lastSt?.nameTc || (trip.bound === 'I' ? '回程' : '去程');
-  const basePrefix = trip.routeId ? `${trip.routeId}-${destName}` : (destName || '自訂班次');
   const pct = totalStops > 0 ? Math.round((coveredCnt / totalStops) * 100) : 0;
 
-  // 找出套用於此單一方向班次的歡迎詞
   const matchedWelcomes = Object.values(studioDb.welcomeRules || {}).filter(w =>
     w && w.audioPath && !studioDb.ignored[w.audioPath] &&
     w.scope !== 'default' && Array.isArray(w.tripNames) && w.tripNames.includes(trip.name)
   );
 
+  const curLabel = (trip.tripLabel || '').trim();
   let curType = trip.tripType || '';
   if (!curType) {
-    if (trip.name.includes('特快班次')) curType = 'express';
-    else if (trip.name.includes('特別班次經')) curType = 'special_via';
-    else if (trip.name.includes('正常路線')) curType = 'normal';
+    if (curLabel === '正常路線') curType = 'normal';
+    else if (curLabel === '特快班次') curType = 'express';
+    else if (curLabel.startsWith('特別班次經')) curType = 'special_via';
     else curType = 'custom';
   }
   let curVia = trip.viaText || '';
-  if (!curVia && trip.name.includes('特別班次經')) {
-    curVia = trip.name.split('特別班次經').pop().trim();
+  if (!curVia && curLabel.startsWith('特別班次經')) {
+    curVia = curLabel.slice('特別班次經'.length).trim();
   }
 
-  titleEl.textContent = `${trip.routeId ? trip.routeId + ' ' : ''}${trip.name}`;
+  const cleanTitle = (trip.routeId && !trip.name.startsWith(`${trip.routeId}-`))
+    ? `${trip.routeId} ${trip.name}`
+    : trip.name;
+  titleEl.textContent = cleanTitle;
   subEl.textContent = firstSt && lastSt
     ? `${firstSt.nameTc} → ${lastSt.nameTc}（共 ${totalStops} 站・覆蓋 ${coveredCnt}/${totalStops}）`
     : `班次代碼：${trip.tripKey}`;
   qNav.classList.remove('hidden');
 
   body.innerHTML = `
-    <!-- Card 1: 班次分類與命名 -->
+    <!-- Card 1: 選擇班次頁附加命名（原班次編號保持不變） -->
     <div class="bg-white rounded-2xl border border-[#DCE3EC] p-4 space-y-3.5">
       <div class="flex items-center justify-between gap-2">
-        <h3 class="text-sm font-black text-slate-900">班次類型與命名</h3>
-        <span class="text-[11px] font-bold text-slate-400">原始：${esc(trip.defaultName)}</span>
+        <h3 class="text-sm font-black text-slate-900">選擇班次頁附加命名</h3>
+        <span class="text-[11px] font-bold text-slate-500 truncate">原班次不變：${esc(trip.defaultName)}</span>
       </div>
 
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">
@@ -2464,12 +2483,17 @@ function renderTripInspector() {
       </div>
 
       <div class="space-y-1.5">
-        <label class="block text-xs font-black text-slate-700">班次顯示名稱（可隨時自由修改）：</label>
+        <label class="block text-xs font-black text-slate-700">顯示於報站器「選擇班次頁」嘅命名（唔會更改原班次名稱）：</label>
         <div class="flex gap-2">
-          <input id="tripFinalNameInput" type="text" value="${esc(trip.name)}" placeholder="輸入完整班次名稱..." class="flex-1 min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-black text-slate-900 focus:bg-white focus:border-[#0052CC]" />
-          <button id="btnResetTripDefault" title="還原系統預設名稱" class="min-h-[44px] px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold shrink-0">還原</button>
+          <input id="tripLabelInput" type="text" value="${esc(curLabel)}" placeholder="點上方快捷按鈕或自由填入（例如：正常路線、特別班次經西隧）" class="flex-1 min-h-[44px] px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-300 text-sm font-black text-slate-900 focus:bg-white focus:border-[#0052CC]" />
+          <button id="btnClearTripLabel" title="清除此班次附加命名" class="min-h-[44px] px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold shrink-0">清除</button>
         </div>
-        <p class="text-[11px] text-slate-500">更改後會自動同步更新所有已綁定此班次嘅報站規則與單一方向歡迎詞。</p>
+      </div>
+
+      <div class="rounded-xl bg-[#3b3a36] text-white px-3.5 py-2.5 border border-slate-300 space-y-0.5">
+        <div class="text-[10px] font-bold text-zinc-300">報站器「選擇班次頁」預覽</div>
+        <div class="text-sm font-black truncate">${esc(trip.defaultName)}</div>
+        <div id="tripLabelPreview" class="text-xs font-black text-[#fff000] truncate ${curLabel ? '' : 'hidden'}">${esc(curLabel)}</div>
       </div>
     </div>
 
@@ -2519,7 +2543,6 @@ function renderTripInspector() {
     </button>
   `;
 
-  // 渲染班次車站清單（支援即時篩選與只看缺失）
   const renderStopsRows = () => {
     const q = (document.getElementById('tripStopFilterInput')?.value || '').trim().toLowerCase();
     const onlyMiss = Boolean(document.getElementById('chkTripOnlyMiss')?.checked);
@@ -2572,7 +2595,6 @@ function renderTripInspector() {
   document.getElementById('tripStopFilterInput').oninput = renderStopsRows;
   document.getElementById('chkTripOnlyMiss').onchange = renderStopsRows;
 
-  // 歡迎詞快速按鈕
   const btnWel = document.getElementById('btnGoWelcomeFromTrip');
   if (btnWel) {
     btnWel.onclick = () => {
@@ -2584,10 +2606,16 @@ function renderTripInspector() {
   }
   body.querySelectorAll('[data-play-btn]').forEach(b => b.onclick = () => togglePlayAudio(b.dataset.playBtn));
 
-  // 班次分類切換與自動組名
-  const nameInp = document.getElementById('tripFinalNameInput');
+  const labelInp = document.getElementById('tripLabelInput');
   const viaBox = document.getElementById('tripViaBox');
   const viaInp = document.getElementById('tripViaInput');
+  const previewEl = document.getElementById('tripLabelPreview');
+
+  const syncPreview = () => {
+    const val = (labelInp.value || '').trim();
+    previewEl.textContent = val;
+    previewEl.classList.toggle('hidden', !val);
+  };
 
   const updateTypeUi = () => {
     body.querySelectorAll('.trip-type-btn').forEach(btn => {
@@ -2607,15 +2635,16 @@ function renderTripInspector() {
     viaBox.classList.toggle('hidden', curType !== 'special_via');
   };
 
-  const applyPresetName = () => {
+  const applyPresetLabel = () => {
     if (curType === 'normal') {
-      nameInp.value = `${basePrefix}-正常路線`;
+      labelInp.value = '正常路線';
     } else if (curType === 'express') {
-      nameInp.value = `${basePrefix}-特快班次`;
+      labelInp.value = '特快班次';
     } else if (curType === 'special_via') {
       const v = (viaInp.value || '').trim().replace(/^經/, '');
-      nameInp.value = v ? `${basePrefix}-特別班次經${v}` : `${basePrefix}-特別班次經`;
+      labelInp.value = v ? `特別班次經${v}` : '特別班次經';
     }
+    syncPreview();
   };
 
   body.querySelectorAll('.trip-type-btn').forEach(btn => {
@@ -2623,10 +2652,10 @@ function renderTripInspector() {
       curType = btn.dataset.ttype;
       updateTypeUi();
       if (curType === 'custom') {
-        nameInp.focus();
-        nameInp.select();
+        labelInp.focus();
+        labelInp.select();
       } else {
-        applyPresetName();
+        applyPresetLabel();
         if (curType === 'special_via') viaInp.focus();
       }
     };
@@ -2634,26 +2663,39 @@ function renderTripInspector() {
 
   viaInp.oninput = () => {
     curVia = viaInp.value.trim().replace(/^經/, '');
-    if (curType === 'special_via') applyPresetName();
+    if (curType === 'special_via') applyPresetLabel();
   };
 
-  document.getElementById('btnResetTripDefault').onclick = () => {
+  labelInp.oninput = syncPreview;
+
+  document.getElementById('btnClearTripLabel').onclick = () => {
     curType = 'custom';
     curVia = '';
     viaInp.value = '';
-    nameInp.value = trip.defaultName;
+    labelInp.value = '';
     updateTypeUi();
+    syncPreview();
   };
 
   const saveTripNaming = () => {
-    const oldName = trip.name;
-    const newName = (nameInp.value || '').trim();
-    if (!newName) { showToast('請輸入班次名稱'); nameInp.focus(); return; }
+    const newLabel = (labelInp.value || '').trim();
     const viaClean = curType === 'special_via' ? (viaInp.value || '').trim().replace(/^經/, '') : '';
     const base = tripCatalog.get(trip.tripKey);
+
+    if (!newLabel && base) {
+      delete studioDb.customTrips[trip.tripKey];
+      syncAtomicRecord('customTrips', trip.tripKey, null);
+      showToast('已清除此班次附加命名');
+      renderMainList();
+      renderTripInspector();
+      return;
+    }
+
     const rec = {
       tripKey: trip.tripKey,
-      name: newName,
+      name: base?.defaultName || trip.defaultName || trip.name,
+      defaultName: base?.defaultName || trip.defaultName || trip.name,
+      tripLabel: newLabel,
       routeId: base?.routeId || trip.routeId || '',
       bound: base?.bound || trip.bound || 'O',
       serviceType: base?.serviceType || trip.serviceType || '1',
@@ -2667,28 +2709,13 @@ function renderTripInspector() {
     studioDb.customTrips[trip.tripKey] = rec;
     syncAtomicRecord('customTrips', trip.tripKey, rec);
 
-    // 同步連動更新所有引用舊班次名稱的車站規則與歡迎詞規則
-    if (oldName !== newName) {
-      for (const [ap, r] of Object.entries(studioDb.rules || {})) {
-        if (Array.isArray(r.tripNames) && r.tripNames.includes(oldName)) {
-          r.tripNames = r.tripNames.map(x => x === oldName ? newName : x);
-          syncAtomicRecord('rules', ap, r);
-        }
-      }
-      for (const [ap, w] of Object.entries(studioDb.welcomeRules || {})) {
-        if (Array.isArray(w.tripNames) && w.tripNames.includes(oldName)) {
-          w.tripNames = w.tripNames.map(x => x === oldName ? newName : x);
-          syncAtomicRecord('welcomeRules', ap, w);
-        }
-      }
-    }
-    showToast(`已儲存班次命名：${newName}`);
+    showToast(newLabel ? `已儲存選擇班次頁命名：${newLabel}` : '已更新班次資料');
     renderMainList();
     renderTripInspector();
   };
 
   document.getElementById('btnSaveTripMeta').onclick = saveTripNaming;
-  nameInp.onkeydown = (e) => { if (e.key === 'Enter') saveTripNaming(); };
+  labelInp.onkeydown = (e) => { if (e.key === 'Enter') saveTripNaming(); };
   syncPlayerUi();
 }
 
@@ -2901,11 +2928,29 @@ function buildExportPayload() {
     });
   }
 
+  const tripNames = {};
+  for (const [k, c] of Object.entries(studioDb.customTrips || {})) {
+    if (!c) continue;
+    const base = tripCatalog.get(k);
+    const lbl = getTripLabel(k);
+    tripNames[k] = {
+      ...c,
+      tripKey: k,
+      name: base?.defaultName || c.defaultName || c.name || k,
+      defaultName: base?.defaultName || c.defaultName || c.name || k,
+      tripLabel: lbl,
+      routeId: base?.routeId || c.routeId || '',
+      bound: base?.bound || c.bound || 'O',
+      serviceType: base?.serviceType || c.serviceType || '1',
+      destTc: base?.destTc || c.destTc || ''
+    };
+  }
+
   return {
     version: 5,
     updatedAt: new Date().toISOString(),
     confirmed, details, rules, defaultWelcome, welcomeRules,
-    tripNames: studioDb.customTrips || {}
+    tripNames
   };
 }
 
@@ -2919,7 +2964,7 @@ function downloadJson(obj, filename) {
 
 async function publishToWebRepo() {
   const payload = buildExportPayload();
-  if (!payload.rules.length && !payload.welcomeRules.length) {
+  if (!payload.rules.length && !payload.welcomeRules.length && !Object.keys(payload.tripNames || {}).length) {
     showToast('目前未有已處理音檔或歡迎詞可發佈');
     return;
   }
