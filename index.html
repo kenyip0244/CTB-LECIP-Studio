@@ -539,7 +539,7 @@ function showToast(msg) {
 function getAudioBase() { return (localStorage.getItem(KEY_CFG_AUDIO) || DEFAULT_AUDIO_BASE).trim().replace(/\/+$/, ''); }
 function getWebDataBase() { return (localStorage.getItem(KEY_CFG_WEBDATA) || DEFAULT_WEB_DATA_BASE).trim().replace(/\/+$/, ''); }
 function getGhToken() { return (localStorage.getItem(KEY_CFG_GH) || '').trim(); }
-function getFbUrl() { return (localStorage.getItem(KEY_CFG_FB) || '').trim().replace(/\/+$/, ''); }
+function getFbUrl() { return (localStorage.getItem(KEY_CFG_FB) || 'https://ctb-lecip-studio-default-rtdb.asia-southeast1.firebasedatabase.app').trim().replace(/\/+$/, ''); }
 function getRoomId() { return (localStorage.getItem(KEY_CFG_ROOM) || 'main').trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'main'; }
 function getMyName() { return (localStorage.getItem(KEY_CFG_NAME) || '').trim() || '成員-' + CLIENT_ID.slice(2, 6); }
 function isAutoPlayOn() { return localStorage.getItem(KEY_CFG_AUTOPLAY) === '1'; }
@@ -634,15 +634,20 @@ async function syncAtomicRecord(collection, key, valueOrNull) {
 async function uploadFullLocalDbToRoomIfEmpty() {
   const base = roomBaseUrl();
   if (!base) return;
-  const check = await safeFetchJson(`${base}/rules.json?shallow=true`);
-  if (check && Object.keys(check).length > 0) return;
-  const payload = { rules: {}, welcomeRules: {}, ignored: {}, customTrips: {} };
-  for (const [k, v] of Object.entries(studioDb.rules)) payload.rules[encodeFbKey(k)] = { ...v, audioPath: k };
-  for (const [k, v] of Object.entries(studioDb.welcomeRules)) payload.welcomeRules[encodeFbKey(k)] = { ...v, audioPath: k };
-  for (const [k, v] of Object.entries(studioDb.ignored)) payload.ignored[encodeFbKey(k)] = typeof v === 'object' ? v : { audioPath: k };
-  for (const [k, v] of Object.entries(studioDb.customTrips)) payload.customTrips[encodeFbKey(k)] = { ...v, tripKey: k };
-  if (Object.keys(payload.rules).length || Object.keys(payload.welcomeRules).length || Object.keys(payload.customTrips).length) {
-    await fetch(`${base}.json`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+  for (const col of ['rules', 'welcomeRules', 'ignored', 'customTrips']) {
+    const entries = Object.entries(studioDb[col] || {});
+    if (!entries.length) continue;
+    const patchObj = {};
+    for (const [k, v] of entries) {
+      patchObj[encodeFbKey(k)] = col === 'ignored'
+        ? (typeof v === 'object' ? v : { audioPath: k })
+        : (col === 'customTrips' ? { ...v, tripKey: k } : { ...v, audioPath: k });
+    }
+    await fetch(`${base}/${col}.json`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patchObj)
+    }).catch(() => {});
   }
 }
 
@@ -847,9 +852,9 @@ function startRealtimeCollab() {
 
   fbFallbackTimer = setInterval(() => {
     if (document.visibilityState === 'visible') {
-      safeFetchJson(`${base}.json?t=${Date.now()}`).then(d => { if (d) applyRoomRootSnapshot(d); });
+      pullFullRoomNow(true);
     }
-  }, 45000);
+  }, 4000);
 }
 
 function isAdminUser() {
@@ -2450,6 +2455,7 @@ async function loadRemoteData() {
 
   allRouteIds = Array.from(routeSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   mergeMappingIntoDb(mapData);
+  await pullFullRoomNow(true);
   renderMainList();
   if (selectedAudioPath) renderAudioInspector();
   else if (selectedWelcomePath) renderWelcomeInspector();
@@ -2593,7 +2599,8 @@ function initEvents() {
 
   document.getElementById('btnExportJson').onclick = () => { downloadJson(buildExportPayload(), 'audio_mapping.json'); showToast('已下載 audio_mapping.json'); };
   document.getElementById('btnPublishWeb').onclick = publishToWebRepo;
-  document.getElementById('btnReloadData').onclick = loadRemoteData;
+  document.getElementById('btnReloadData').onclick = async () => { await loadRemoteData(); await pullFullRoomNow(false); showToast('?????????'); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullFullRoomNow(true); });
 
   document.getElementById('importJsonInput').onchange = async (e) => {
     const f = e.target.files?.[0];
