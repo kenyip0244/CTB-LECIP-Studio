@@ -1149,7 +1149,7 @@ function updateCounters() {
     if (isWelcomeCandidatePath(p)) welcomeSet.add(p);
     if (!filterAudioCategory(p)) continue;
     if (isAudioProcessed(p)) processedCnt++;
-    else unmatchedCnt++;
+    else if (!studioDb.welcomeRules?.[p]) unmatchedCnt++;
   }
   const welcomeCnt = Array.from(welcomeSet).filter(p => !studioDb.ignored[p]).length;
   let coveredStops = 0;
@@ -1212,7 +1212,7 @@ function renderMainList() {
       if (studioDb.ignored[path]) return false;
       if (!filterAudioCategory(path)) return false;
       const proc = isAudioProcessed(path);
-      if (activeNav === 'unmatched' && proc) return false;
+      if (activeNav === 'unmatched' && (proc || Boolean(studioDb.welcomeRules?.[path]))) return false;
       if (activeNav === 'processed' && !proc) return false;
       if (kw) {
         const r = studioDb.rules[path];
