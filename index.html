@@ -5095,10 +5095,20 @@ boot();
   }
 
   async function collectDroppedFiles(dataTransfer) {
-    const out = [];
+    // 必須於首個 await 前同步擷取所有 files 與 entries，否則瀏覽器會清空後續項目
+    const rawFiles = Array.from(dataTransfer?.files || []);
     const items = dataTransfer?.items ? Array.from(dataTransfer.items) : [];
-    const hasEntries = items.some(it => typeof it.webkitGetAsEntry === 'function');
-    if (hasEntries) {
+    const entries = items
+      .map(it => (typeof it.webkitGetAsEntry === 'function' ? it.webkitGetAsEntry() : null))
+      .filter(Boolean);
+
+    const hasDir = entries.some(e => e.isDirectory);
+    if (!hasDir && rawFiles.length) {
+      return rawFiles;
+    }
+
+    if (entries.length) {
+      const out = [];
       const walkEntry = (entry) => new Promise((resolve) => {
         if (!entry) return resolve();
         if (entry.isFile) {
@@ -5106,9 +5116,9 @@ boot();
         } else if (entry.isDirectory) {
           const reader = entry.createReader();
           const readAll = () => {
-            reader.readEntries(async entries => {
-              if (!entries.length) return resolve();
-              for (const child of entries) await walkEntry(child);
+            reader.readEntries(async childEntries => {
+              if (!childEntries.length) return resolve();
+              for (const child of childEntries) await walkEntry(child);
               readAll();
             }, () => resolve());
           };
@@ -5117,13 +5127,12 @@ boot();
           resolve();
         }
       });
-      for (const it of items) {
-        const entry = it.webkitGetAsEntry?.();
-        if (entry) await walkEntry(entry);
+      for (const entry of entries) {
+        await walkEntry(entry);
       }
       if (out.length) return out;
     }
-    return Array.from(dataTransfer?.files || []);
+    return rawFiles;
   }
 
   window.renderUploadQueue = function renderUploadQueue() {
