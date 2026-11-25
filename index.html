@@ -1353,6 +1353,21 @@ function recalcStopSections(stops) {
   });
 }
 
+// === TRIP SEQ HELPER START ===
+function extractTripSeqFromName(name, fallback = '1') {
+  const m = String(name || '').trim().match(/-(\d+)$/);
+  return m ? m[1] : String(fallback || '1');
+}
+
+function applyTripSeqToName(baseName, seqStr) {
+  const s = String(baseName || '').trim();
+  const num = String(seqStr || '').trim();
+  if (!s || !num) return s;
+  if (/-\d+$/.test(s)) return s.replace(/-\d+$/, `-${num}`);
+  return `${s}-${num}`;
+}
+// === TRIP SEQ HELPER END ===
+
 function getAllTripEntries(opts = {}) {
   const includeDeleted = Boolean(opts.includeDeleted);
   const map = new Map();
@@ -1362,9 +1377,16 @@ function getAllTripEntries(opts = {}) {
     const hasCustomStops = c && c.customStops != null;
     const stops = hasCustomStops ? recalcStopSections(normalizeTripStopsArray(c.customStops)) : recalcStopSections(v.stops);
     const firstFare = stops.length && stops[0].sectionFare != null ? stops[0].sectionFare : (c?.fullFare ?? v.fullFare ?? null);
+    const effSeq = (c?.customSeqNo != null && String(c.customSeqNo).trim() !== '')
+      ? String(c.customSeqNo).trim()
+      : extractTripSeqFromName(v.defaultName, v.seqNo || v.serviceType || '1');
+    const effName = (c?.customSeqNo != null && String(c.customSeqNo).trim() !== '')
+      ? applyTripSeqToName(v.defaultName, effSeq)
+      : v.defaultName;
     map.set(k, {
       tripKey: k, routeId: v.routeId, bound: v.bound, serviceType: v.serviceType,
-      name: v.defaultName, defaultName: v.defaultName,
+      seqNo: effSeq, customSeqNo: c?.customSeqNo ? String(c.customSeqNo).trim() : '',
+      name: effName, defaultName: v.defaultName,
       destTc: (c?.destTc || v.destTc || ''),
       origTc: (c?.origTc || v.origTc || ''),
       fullFare: firstFare,
@@ -1381,10 +1403,18 @@ function getAllTripEntries(opts = {}) {
     const firstSt = stops.length ? stopById.get(stops[0].stopId) : null;
     const lastSt = stops.length ? stopById.get(stops[stops.length - 1].stopId) : null;
     const firstFare = stops.length && stops[0].sectionFare != null ? stops[0].sectionFare : (c.fullFare ?? null);
+    const rawDef = c.defaultName || c.name || k;
+    const effSeq = (c.customSeqNo != null && String(c.customSeqNo).trim() !== '')
+      ? String(c.customSeqNo).trim()
+      : extractTripSeqFromName(rawDef, c.serviceType || '1');
+    const effName = (c.customSeqNo != null && String(c.customSeqNo).trim() !== '')
+      ? applyTripSeqToName(rawDef, effSeq)
+      : rawDef;
     map.set(k, {
       tripKey: k, routeId: String(c.routeId || '').toUpperCase(), bound: String(c.bound || 'O').toUpperCase(),
       serviceType: c.serviceType || '1',
-      name: c.defaultName || c.name || k, defaultName: c.defaultName || c.name || k,
+      seqNo: effSeq, customSeqNo: c.customSeqNo ? String(c.customSeqNo).trim() : '',
+      name: effName, defaultName: rawDef,
       destTc: c.destTc || lastSt?.nameTc || '',
       origTc: c.origTc || firstSt?.nameTc || '',
       fullFare: firstFare,
@@ -3937,7 +3967,20 @@ function renderTripInspector() {
         </div>
       ` : ''}
 
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">
+            <!-- 班次代號數字編輯 -->
+      <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+        <div class="min-w-0">
+          <label for="editTripSeqNo" class="block text-xs font-black text-slate-800">班次代號數字</label>
+          <div class="text-[11px] font-bold text-slate-500 truncate">顯示為：<span id="tripSeqNamePreview" class="text-[#0052CC] font-black">${esc(trip.name)}</span></div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span class="text-xs font-black text-slate-400">-</span>
+          <input id="editTripSeqNo" type="text" inputmode="numeric" maxlength="4" value="${esc(trip.seqNo || extractTripSeqFromName(trip.defaultName, '1'))}"
+                 class="w-16 min-h-[38px] px-2 py-1 rounded-lg bg-white border border-slate-300 text-center text-sm font-black font-mono text-slate-900 focus:border-[#0052CC] outline-none" />
+        </div>
+      </div>
+
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">
         <button data-ttype="normal" class="trip-type-btn min-h-[40px] px-2 rounded-xl border ${curType === 'normal' ? 'bg-[#0B875B] text-white border-[#0B875B]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">正常路線</button>
         <button data-ttype="express" class="trip-type-btn min-h-[40px] px-2 rounded-xl border ${curType === 'express' ? 'bg-[#0052CC] text-white border-[#0052CC]' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">特快班次</button>
         <button data-ttype="special_via" class="trip-type-btn min-h-[40px] px-2 rounded-xl border ${curType === 'special_via' ? 'bg-amber-500 text-white border-amber-500' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}">特別班次經XXX</button>
@@ -4431,8 +4474,11 @@ function renderTripInspector() {
     const lastSt = cleanedStops.length ? (stopById.get(cleanedStops[cleanedStops.length - 1].stopId) || cleanedStops[cleanedStops.length - 1].apiStopMeta) : null;
     const finalFare = cleanedStops.length && cleanedStops[0].sectionFare != null ? cleanedStops[0].sectionFare : (base?.fullFare ?? trip.fullFare ?? null);
 
+    const editedSeqNo = (document.getElementById('editTripSeqNo')?.value || '').trim().replace(/[^\d]/g, '');
+    const baseSeqNo = extractTripSeqFromName(base?.defaultName || trip.defaultName || '', base?.seqNo || '1');
+    const seqModified = Boolean(editedSeqNo && editedSeqNo !== baseSeqNo);
     const isAutoNormalDef = /-\s*1$/.test(base?.defaultName || '');
-    if (!newLabel && !stopsModified && base && !isAutoNormalDef) {
+    if (!newLabel && !stopsModified && !seqModified && base && !isAutoNormalDef) {
       delete studioDb.customTrips[trip.tripKey];
       syncAtomicRecord('customTrips', trip.tripKey, null);
       showToast('已恢復系統預設班次資料');
@@ -4724,8 +4770,9 @@ function buildExportPayload() {
     const entry = {
       ...c,
       tripKey: k,
-      name: base?.defaultName || c.defaultName || c.name || k,
+      name: (c.customSeqNo != null && String(c.customSeqNo).trim() !== '') ? applyTripSeqToName(base?.defaultName || c.defaultName || c.name || k, String(c.customSeqNo).trim()) : (base?.defaultName || c.defaultName || c.name || k),
       defaultName: base?.defaultName || c.defaultName || c.name || k,
+      customSeqNo: c.customSeqNo != null ? String(c.customSeqNo).trim() : '',
       tripLabel: lbl,
       routeId: String(base?.routeId || c.routeId || '').toUpperCase(),
       bound: String(base?.bound || c.bound || 'O').toUpperCase(),
