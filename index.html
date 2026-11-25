@@ -1103,16 +1103,20 @@ function getTripDisplayName(tripKey) {
 
 function getTripLabel(tripKey) {
   const c = studioDb.customTrips?.[tripKey];
-  if (!c) return '';
-  if (typeof c.tripLabel === 'string' && c.tripLabel.trim()) return c.tripLabel.trim();
-  if (c.tripType === 'normal') return '正常路線';
-  if (c.tripType === 'express') return '特快班次';
-  if (c.tripType === 'special_via') return c.viaText ? `特別班次經${c.viaText}` : '特別班次';
   const base = tripCatalog.get(tripKey);
-  if (c.name && base && c.name !== base.defaultName) {
-    const pfx = `${base.routeId}-${base.destTc || ''}-`;
-    return c.name.startsWith(pfx) ? c.name.slice(pfx.length).trim() : c.name.trim();
+  const defName = base?.defaultName || c?.defaultName || c?.name || '';
+  if (c) {
+    if (c.labelCleared) return '';
+    if (typeof c.tripLabel === 'string' && c.tripLabel.trim()) return c.tripLabel.trim();
+    if (c.tripType === 'normal') return '正常路線';
+    if (c.tripType === 'express') return '特快班次';
+    if (c.tripType === 'special_via') return c.viaText ? `特別班次經${c.viaText}` : '特別班次';
+    if (c.name && base && c.name !== base.defaultName) {
+      const pfx = `${base.routeId}-${base.destTc || ''}-`;
+      return c.name.startsWith(pfx) ? c.name.slice(pfx.length).trim() : c.name.trim();
+    }
   }
+  if (/-\s*1$/.test(defName)) return '正常路線';
   return '';
 }
 
@@ -1176,8 +1180,9 @@ function getAllTripEntries(opts = {}) {
       origTc: (c?.origTc || v.origTc || ''),
       fullFare: firstFare,
       stops, hasCustomStops, isManual: false, deleted: Boolean(c?.deleted),
+      patternId: v.patternId || c?.patternId || '',
       tripLabel: getTripLabel(k),
-      tripType: c?.tripType || '', viaText: c?.viaText || ''
+      tripType: c?.tripType || (getTripLabel(k) === '正常路線' ? 'normal' : ''), viaText: c?.viaText || ''
     });
   }
   for (const [k, c] of Object.entries(studioDb.customTrips || {})) {
@@ -4189,7 +4194,8 @@ function renderTripInspector() {
     const lastSt = cleanedStops.length ? (stopById.get(cleanedStops[cleanedStops.length - 1].stopId) || cleanedStops[cleanedStops.length - 1].apiStopMeta) : null;
     const finalFare = cleanedStops.length && cleanedStops[0].sectionFare != null ? cleanedStops[0].sectionFare : (base?.fullFare ?? trip.fullFare ?? null);
 
-    if (!newLabel && !stopsModified && base) {
+    const isAutoNormalDef = /-\s*1$/.test(base?.defaultName || '');
+    if (!newLabel && !stopsModified && base && !isAutoNormalDef) {
       delete studioDb.customTrips[trip.tripKey];
       syncAtomicRecord('customTrips', trip.tripKey, null);
       showToast('已恢復系統預設班次資料');
@@ -4212,6 +4218,8 @@ function renderTripInspector() {
       routeId: editedRoute,
       bound: editedBound,
       serviceType: base?.serviceType || trip.serviceType || '1',
+      patternId: base?.patternId || trip.patternId || '',
+      labelCleared: !newLabel && /-\s*1$/.test(base?.defaultName || trip.defaultName || ''),
       destTc: editedDest,
       origTc: firstSt?.nameTc || base?.origTc || trip.origTc || '',
       fullFare: finalFare,
@@ -4615,30 +4623,54 @@ async function loadRemoteData() {
   stopById.clear(); stopsByNormName.clear(); tripCatalog.clear();
   const routeSet = new Set();
 
-  const tripMetaByKey = new Map();
+  // 先由 routes.json 按 patternId 獨立建立每個班次，順序與報站器完全一致
+  const tripMetaByRawPat = new Map();
+  const destSeqCounter = new Map();
+  const usedKeys = new Set();
+
   if (Array.isArray(routesData)) {
     for (const t of routesData) {
       const rId = String(t.externalRouteNo || t.routeId || t.route || '').replace(/^CTB-/i, '').toUpperCase();
+      if (!rId) continue;
+      routeSet.add(rId);
       const bnd = String(t.bound || t.dir || 'O').toUpperCase();
-      const stype = String(t.serviceType || t.service_type || '1');
-      const key = `${rId}|${bnd}|${stype}`;
+      const patId = String(t.patternId ?? '').trim();
+      const stype = String(t.serviceType || t.service_type || '1').trim();
       const destTc = cleanJoint(t.destTc || t.endStopNameTc || '');
       const origTc = cleanJoint(t.startStopNameTc || t.origTc || '');
       const fullFare = (t.fullFare != null && Number.isFinite(Number(t.fullFare))) ? Number(t.fullFare) : null;
-      const label = destTc ? `${rId}-${destTc}-${stype}` : `${rId}-${bnd === 'I' ? '回程' : '去程'}-${stype}`;
-      if (!tripMetaByKey.has(key)) {
-        tripMetaByKey.set(key, { label, destTc, origTc, fullFare, patternId: t.patternId || '' });
+
+      const destGroupKey = `${rId}|${destTc || bnd}`;
+      const seqNo = (destSeqCounter.get(destGroupKey) || 0) + 1;
+      destSeqCounter.set(destGroupKey, seqNo);
+
+      let tKey = patId ? `${rId}|${bnd}|${patId}` : `${rId}|${bnd}|${stype}`;
+      if (usedKeys.has(tKey)) tKey = `${rId}|${bnd}|${patId || stype}#${seqNo}`;
+      usedKeys.add(tKey);
+
+      const label = destTc ? `${rId}-${destTc}-${seqNo}` : `${rId}-${bnd === 'I' ? '回程' : '去程'}-${seqNo}`;
+      const rawPatKey = `${rId}|${bnd}|${patId}`;
+      const meta = { tKey, seqNo, label, destTc, origTc, fullFare, patternId: patId, serviceType: stype };
+      if (!tripMetaByRawPat.has(rawPatKey)) {
+        tripMetaByRawPat.set(rawPatKey, meta);
       }
+      tripCatalog.set(tKey, {
+        tripKey: tKey, routeId: rId, bound: bnd, serviceType: stype, patternId: patId,
+        seqNo, defaultName: label, destTc, origTc, fullFare, stops: []
+      });
     }
   }
 
+  // 再將 stops.json 按 (routeId, bound, patternId) 精準歸類到對應獨立班次，避免同一車站重疊
+  const seenStopSeqByTrip = new Map();
   for (const row of (Array.isArray(stopsData) ? stopsData : [])) {
     const sid = String(row.stopId || '').trim();
     if (!sid) continue;
     const numId = sid.replace(/^0+/, '') || '0';
     const rId = String(row.routeId || row.route || '').replace(/^CTB-/i, '').toUpperCase();
     const bnd = String(row.bound || row.dir || 'O').toUpperCase();
-    const stype = String(row.serviceType || row.service_type || '1');
+    const patId = String(row.patternId ?? '').trim();
+    const stype = String(row.serviceType || row.service_type || '1').trim();
     const seq = Number(row.seq ?? row.stopSeq ?? 0);
     if (rId) routeSet.add(rId);
 
@@ -4656,19 +4688,27 @@ async function loadRemoteData() {
     if (rId) stopById.get(sid).routesSet.add(rId);
 
     if (rId) {
-      const tKey = `${rId}|${bnd}|${stype}`;
+      const rawPatKey = `${rId}|${bnd}|${patId}`;
+      const meta = tripMetaByRawPat.get(rawPatKey);
+      const tKey = meta ? meta.tKey : (patId ? `${rId}|${bnd}|${patId}` : `${rId}|${bnd}|${stype}`);
       if (!tripCatalog.has(tKey)) {
-        const meta = tripMetaByKey.get(tKey);
-        const explicitName = String(row.tripName || row.trip_name || row.serviceName || '').trim();
         const destTc = cleanJoint(row.destTc || row.dest_tc || meta?.destTc || '');
-        const defaultName = explicitName || meta?.label || (destTc ? `${rId}-${destTc}-${stype}` : `${rId}-${bnd === 'I' ? '回程' : '去程'}-${stype}`);
+        const destGroupKey = `${rId}|${destTc || bnd}`;
+        const seqNo = (destSeqCounter.get(destGroupKey) || 0) + 1;
+        destSeqCounter.set(destGroupKey, seqNo);
+        const defaultName = destTc ? `${rId}-${destTc}-${seqNo}` : `${rId}-${bnd === 'I' ? '回程' : '去程'}-${seqNo}`;
         tripCatalog.set(tKey, {
-          tripKey: tKey, routeId: rId, bound: bnd, serviceType: stype,
-          defaultName, destTc, origTc: meta?.origTc || '',
-          fullFare: meta?.fullFare ?? null, patternId: meta?.patternId || '',
-          stops: []
+          tripKey: tKey, routeId: rId, bound: bnd, serviceType: stype, patternId: patId,
+          seqNo, defaultName, destTc, origTc: meta?.origTc || '',
+          fullFare: meta?.fullFare ?? null, stops: []
         });
       }
+
+      if (!seenStopSeqByTrip.has(tKey)) seenStopSeqByTrip.set(tKey, new Set());
+      const dedupKey = `${seq}|${sid}`;
+      if (seenStopSeqByTrip.get(tKey).has(dedupKey)) continue;
+      seenStopSeqByTrip.get(tKey).add(dedupKey);
+
       const sFare = (row.sectionFare != null && row.sectionFare !== '' && Number.isFinite(Number(row.sectionFare)))
         ? Number(row.sectionFare)
         : null;
