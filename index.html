@@ -427,18 +427,33 @@
           自動壓縮轉為輕量 MP3（128kbps，取消勾選則保留原檔 WAV / MP3）
         </label>
 
-        <label id="uploadDropZone" class="block border-2 border-dashed border-slate-300 hover:border-[#0052CC] rounded-xl p-6 text-center cursor-pointer bg-slate-50">
-          <span class="block text-sm font-black text-[#0052CC]">點選或拖拉音檔至此（手機／iPad 支援檔案 App 多選）</span>
-          <span class="block text-[11px] text-slate-500 mt-1">支援 .mp3 / .wav / .m4a / .ogg</span>
-          <input id="uploadFileInput" type="file" accept=".mp3,.wav,.m4a,.ogg,audio/*" multiple class="hidden" />
+        <label id="uploadDropZone" class="block border-2 border-dashed border-slate-300 hover:border-[#0052CC] rounded-xl p-5 text-center cursor-pointer bg-slate-50 transition-colors">
+          <span class="block text-sm font-black text-[#0052CC]">點選或拖拉多個音檔至此（可分多次累加選取）</span>
+          <span class="block text-[11px] text-slate-500 mt-1">支援 .mp3 / .wav / .m4a / .ogg / .aac（同名檔案將直接覆蓋）</span>
+          <input id="uploadFileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac" multiple class="hidden" />
         </label>
 
-        <div id="uploadQueueBox" class="hidden max-h-40 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl text-[11px]"></div>
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <label class="min-h-[34px] px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-[11px] font-bold cursor-pointer inline-flex items-center gap-1.5">
+            <span>＋ 選取整個資料夾</span>
+            <input id="uploadFolderInput" type="file" webkitdirectory directory multiple class="hidden" />
+          </label>
+          <div class="flex items-center gap-2">
+            <span id="uploadQueueSummary" class="text-[11px] font-bold text-slate-500">已選 0 個音檔</span>
+            <button id="btnClearUploadQueue" type="button" class="hidden min-h-[30px] px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-[#D0302F] text-[11px] font-bold">清空</button>
+          </div>
+        </div>
+
+        <div id="uploadQueueBox" class="hidden max-h-56 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl text-[11px]"></div>
+
+        <div id="uploadProgressBarWrap" class="hidden w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+          <div id="uploadProgressBarFill" class="h-full bg-[#0B875B] transition-all duration-200" style="width:0%"></div>
+        </div>
 
         <div class="flex items-center justify-between gap-2 pt-1">
-          <span id="uploadProgressText" class="text-[11px] font-bold text-slate-500">請先選擇音檔</span>
-          <button id="btnStartUpload" disabled class="min-h-[44px] px-5 py-2 rounded-xl bg-[#0B875B] hover:bg-[#096E4A] disabled:opacity-40 text-white font-black">
-            開始上傳
+          <span id="uploadProgressText" class="text-[11px] font-bold text-slate-500">請先選擇音檔（同名將直接覆蓋）</span>
+          <button id="btnStartUpload" disabled class="min-h-[44px] px-5 py-2 rounded-xl bg-[#0B875B] hover:bg-[#096E4A] disabled:opacity-40 text-white font-black shrink-0">
+            開始批次上傳
           </button>
         </div>
       </div>
@@ -4965,6 +4980,533 @@ function boot() {
 }
 
 boot();
+
+// === BATCH MULTI-FILE UPLOAD START ===
+(function initBatchMultiUploadEngine() {
+  const AUDIO_EXT_RE = /\.(mp3|wav|m4a|ogg|aac|flac)$/i;
+  let batchUploading = false;
+  const uploadStatusMap = new Map(); // fileKey -> { state: 'ready'|'converting'|'uploading'|'done'|'error', msg: '' }
+  let transcodeChain = Promise.resolve();
+
+  function getUploadFileKey(file) {
+    return `${file.name}|${file.size}|${file.lastModified}`;
+  }
+
+  function sanitizeUploadName(rawName, convertMp3) {
+    const clean = String(rawName || 'audio.mp3').split(/[\\/]/).pop().trim() || 'audio.mp3';
+    if (!convertMp3) return clean;
+    return clean.replace(/\.[^.]+$/, '') + '.mp3';
+  }
+
+  function formatFileSize(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = String(reader.result || '');
+        const idx = res.indexOf(',');
+        resolve(idx >= 0 ? res.slice(idx + 1) : res);
+      };
+      reader.onerror = () => reject(new Error('讀取檔案失敗'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function utf8ToBase64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(bin);
+  }
+
+  function base64ToUtf8(b64) {
+    const bin = atob(String(b64 || '').replace(/\s+/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  function setProgressUi(pct, text) {
+    const wrap = document.getElementById('uploadProgressBarWrap');
+    const fill = document.getElementById('uploadProgressBarFill');
+    const prog = document.getElementById('uploadProgressText');
+    if (prog && text != null) prog.textContent = text;
+    if (wrap && fill) {
+      if (pct == null || pct < 0) {
+        wrap.classList.add('hidden');
+        fill.style.width = '0%';
+      } else {
+        wrap.classList.remove('hidden');
+        fill.style.width = `${Math.max(0, Math.min(100, Math.round(pct)))}%`;
+      }
+    }
+  }
+
+  function isValidAudioFile(file) {
+    if (!file) return false;
+    if (AUDIO_EXT_RE.test(file.name || '')) return true;
+    if (file.type && file.type.startsWith('audio/')) return true;
+    return false;
+  }
+
+  function addFilesToQueue(fileList) {
+    if (batchUploading) {
+      showToast('正在批次上傳中，請稍候完成再加入檔案');
+      return;
+    }
+    const convertMp3 = Boolean(document.getElementById('uploadConvertMp3Chk')?.checked);
+    const incoming = Array.from(fileList || []).filter(isValidAudioFile);
+    if (!incoming.length) {
+      showToast('未偵測到支援的音檔（.mp3 / .wav / .m4a / .ogg / .aac）');
+      return;
+    }
+
+    let added = 0;
+    let replaced = 0;
+    for (const f of incoming) {
+      const targetName = sanitizeUploadName(f.name, convertMp3).toLowerCase();
+      const existIdx = pendingUploadFiles.findIndex(
+        x => sanitizeUploadName(x.name, convertMp3).toLowerCase() === targetName
+      );
+      if (existIdx >= 0) {
+        uploadStatusMap.delete(getUploadFileKey(pendingUploadFiles[existIdx]));
+        pendingUploadFiles[existIdx] = f;
+        replaced++;
+      } else {
+        pendingUploadFiles.push(f);
+        added++;
+      }
+      uploadStatusMap.set(getUploadFileKey(f), { state: 'ready', msg: '' });
+    }
+
+    renderUploadQueue();
+    if (replaced > 0 && added > 0) showToast(`已加入 ${added} 個音檔，並覆蓋清單中 ${replaced} 個同名檔`);
+    else if (replaced > 0) showToast(`已覆蓋清單中 ${replaced} 個同名音檔`);
+    else showToast(`已加入 ${added} 個音檔（共 ${pendingUploadFiles.length} 個待上傳）`);
+  }
+
+  async function collectDroppedFiles(dataTransfer) {
+    const out = [];
+    const items = dataTransfer?.items ? Array.from(dataTransfer.items) : [];
+    const hasEntries = items.some(it => typeof it.webkitGetAsEntry === 'function');
+    if (hasEntries) {
+      const walkEntry = (entry) => new Promise((resolve) => {
+        if (!entry) return resolve();
+        if (entry.isFile) {
+          entry.file(f => { if (f) out.push(f); resolve(); }, () => resolve());
+        } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          const readAll = () => {
+            reader.readEntries(async entries => {
+              if (!entries.length) return resolve();
+              for (const child of entries) await walkEntry(child);
+              readAll();
+            }, () => resolve());
+          };
+          readAll();
+        } else {
+          resolve();
+        }
+      });
+      for (const it of items) {
+        const entry = it.webkitGetAsEntry?.();
+        if (entry) await walkEntry(entry);
+      }
+      if (out.length) return out;
+    }
+    return Array.from(dataTransfer?.files || []);
+  }
+
+  window.renderUploadQueue = function renderUploadQueue() {
+    const box = document.getElementById('uploadQueueBox');
+    const summary = document.getElementById('uploadQueueSummary');
+    const btnClear = document.getElementById('btnClearUploadQueue');
+    const btnStart = document.getElementById('btnStartUpload');
+    const cat = document.getElementById('uploadCategorySel')?.value || 'stops';
+    const convertMp3 = Boolean(document.getElementById('uploadConvertMp3Chk')?.checked);
+
+    if (!Array.isArray(pendingUploadFiles) || !pendingUploadFiles.length) {
+      uploadStatusMap.clear();
+      if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+      if (summary) summary.textContent = '已選 0 個音檔';
+      if (btnClear) btnClear.classList.add('hidden');
+      if (btnStart) { btnStart.disabled = true; btnStart.textContent = '開始批次上傳'; }
+      if (!batchUploading) setProgressUi(-1, '請先選擇音檔（同名將直接覆蓋）');
+      return;
+    }
+
+    const totalSize = pendingUploadFiles.reduce((acc, f) => acc + (f.size || 0), 0);
+    if (summary) summary.textContent = `已選 ${pendingUploadFiles.length} 個音檔（${formatFileSize(totalSize)}）`;
+    if (btnClear) btnClear.classList.toggle('hidden', batchUploading);
+    if (btnStart) {
+      btnStart.disabled = batchUploading;
+      btnStart.textContent = batchUploading ? '上傳中...' : `開始批次上傳 (${pendingUploadFiles.length})`;
+    }
+    if (!batchUploading) {
+      setProgressUi(-1, `準備上傳至 audio/${cat}/（共 ${pendingUploadFiles.length} 個，同名檔直接覆蓋）`);
+    }
+
+    if (box) {
+      box.classList.remove('hidden');
+      box.innerHTML = pendingUploadFiles.map((f, idx) => {
+        const key = getUploadFileKey(f);
+        const st = uploadStatusMap.get(key) || { state: 'ready', msg: '' };
+        const outName = sanitizeUploadName(f.name, convertMp3);
+        const relPath = `audio/${cat}/${outName}`;
+        const willOverwrite = audioManifest.includes(relPath);
+
+        let badge = willOverwrite
+          ? `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold shrink-0">將覆蓋</span>`
+          : `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold shrink-0">待上傳</span>`;
+        if (st.state === 'converting') {
+          badge = `<span class="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold shrink-0">轉檔中</span>`;
+        } else if (st.state === 'uploading') {
+          badge = `<span class="px-1.5 py-0.5 rounded bg-blue-100 text-[#0052CC] font-bold shrink-0">上傳中</span>`;
+        } else if (st.state === 'done') {
+          badge = `<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-[#0B875B] font-bold shrink-0">✓ 完成</span>`;
+        } else if (st.state === 'error') {
+          badge = `<span class="px-1.5 py-0.5 rounded bg-red-100 text-[#D0302F] font-bold shrink-0" title="${esc(st.msg || '失敗')}">✕ 失敗</span>`;
+        }
+
+        return `
+          <div class="px-3 py-2 flex items-center justify-between gap-2 bg-white">
+            <div class="min-w-0 flex-1">
+              <div class="font-bold text-slate-900 truncate">${esc(outName)}</div>
+              <div class="text-[10px] text-slate-400 truncate">
+                ${formatFileSize(f.size)}・audio/${esc(cat)}/${st.msg ? `・${esc(st.msg)}` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              ${badge}
+              ${!batchUploading ? `<button type="button" data-rm-up-idx="${idx}" class="w-6 h-6 rounded-md hover:bg-red-50 text-slate-400 hover:text-[#D0302F] font-black text-sm flex items-center justify-center">×</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      box.querySelectorAll('[data-rm-up-idx]').forEach(btn => {
+        btn.onclick = () => {
+          const i = Number(btn.dataset.rmUpIdx);
+          if (!Number.isInteger(i) || i < 0 || i >= pendingUploadFiles.length) return;
+          uploadStatusMap.delete(getUploadFileKey(pendingUploadFiles[i]));
+          pendingUploadFiles.splice(i, 1);
+          renderUploadQueue();
+        };
+      });
+    }
+  };
+
+  async function ghFetchJson(url, opts = {}) {
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data?.message || `HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  async function fetchRemoteManifestList(repoApi, branch, headers) {
+    try {
+      const manJson = await ghFetchJson(`${repoApi}/contents/audio_manifest.json?ref=${encodeURIComponent(branch)}`, { headers });
+      if (manJson.content) {
+        const parsed = JSON.parse(base64ToUtf8(manJson.content));
+        if (Array.isArray(parsed)) return parsed.map(x => String(x).replace(/\\/g, '/'));
+      }
+      if (manJson.sha) {
+        const blobJson = await ghFetchJson(`${repoApi}/git/blobs/${manJson.sha}`, { headers });
+        if (blobJson.content) {
+          const parsed = JSON.parse(base64ToUtf8(blobJson.content));
+          if (Array.isArray(parsed)) return parsed.map(x => String(x).replace(/\\/g, '/'));
+        }
+      }
+    } catch (_) {}
+    return [...audioManifest];
+  }
+
+  async function runBatchAudioUpload() {
+    if (batchUploading) return;
+    if (!pendingUploadFiles.length) {
+      showToast('請先選擇要上傳的音檔');
+      return;
+    }
+
+    const token = (typeof getGhToken === 'function' ? getGhToken() : (localStorage.getItem(KEY_CFG_GH) || '')).trim();
+    if (!token) {
+      showToast('請先喺右上角「設定」填寫 GitHub Token');
+      return;
+    }
+
+    const cat = document.getElementById('uploadCategorySel')?.value || 'stops';
+    const convertMp3 = Boolean(document.getElementById('uploadConvertMp3Chk')?.checked);
+    const repoApi = `https://api.github.com/repos/${GH_OWNER}/${GH_AUDIO_REPO}`;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    };
+
+    const catSel = document.getElementById('uploadCategorySel');
+    const mp3Chk = document.getElementById('uploadConvertMp3Chk');
+    batchUploading = true;
+    if (catSel) catSel.disabled = true;
+    if (mp3Chk) mp3Chk.disabled = true;
+    renderUploadQueue();
+
+    const files = [...pendingUploadFiles];
+    const total = files.length;
+    const uploadedEntries = []; // { file, relPath, blobSha, outBlob }
+    const failedFiles = [];
+    let completed = 0;
+
+    try {
+      setProgressUi(2, '正在連線至 CTB-LECIP-Audio...');
+      let branch = 'main';
+      let refData;
+      try {
+        refData = await ghFetchJson(`${repoApi}/git/ref/heads/main`, { headers });
+      } catch (e) {
+        if (e.status === 404) {
+          branch = 'master';
+          refData = await ghFetchJson(`${repoApi}/git/ref/heads/master`, { headers });
+        } else {
+          throw e;
+        }
+      }
+
+      // 並發 3 條線上傳 Blob（MP3 轉檔內部自動排隊避免手機爆記憶體）
+      const CONCURRENCY = 3;
+      let cursor = 0;
+
+      const worker = async () => {
+        while (true) {
+          const idx = cursor++;
+          if (idx >= files.length) break;
+          const file = files[idx];
+          const fKey = getUploadFileKey(file);
+
+          try {
+            let outBlob = file;
+            let outName = sanitizeUploadName(file.name, convertMp3);
+
+            if (convertMp3 && typeof transcodeToMp3Blob === 'function') {
+              uploadStatusMap.set(fKey, { state: 'converting', msg: '壓縮轉檔中' });
+              renderUploadQueue();
+              const prev = transcodeChain;
+              let release;
+              transcodeChain = new Promise(r => { release = r; });
+              await prev;
+              try {
+                outBlob = await transcodeToMp3Blob(file);
+              } catch (convErr) {
+                // 若格式不支援解碼，自動退回上傳原檔不中斷批次
+                outBlob = file;
+                outName = sanitizeUploadName(file.name, false);
+              } finally {
+                release();
+              }
+            }
+
+            const relPath = `audio/${cat}/${outName}`;
+            uploadStatusMap.set(fKey, { state: 'uploading', msg: '上傳 Blob 中' });
+            renderUploadQueue();
+
+            const b64 = await blobToBase64(outBlob);
+            const blobRes = await ghFetchJson(`${repoApi}/git/blobs`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ content: b64, encoding: 'base64' })
+            });
+
+            uploadedEntries.push({ file, relPath, blobSha: blobRes.sha, outBlob });
+            uploadStatusMap.set(fKey, { state: 'done', msg: '已寫入雲端緩衝' });
+          } catch (err) {
+            failedFiles.push(file);
+            uploadStatusMap.set(fKey, { state: 'error', msg: err?.message || '上傳失敗' });
+          } finally {
+            completed++;
+            const pct = 5 + (completed / total) * 80;
+            setProgressUi(pct, `已處理 ${completed} / ${total} 個音檔（成功 ${uploadedEntries.length}，失敗 ${failedFiles.length}）`);
+            renderUploadQueue();
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, files.length) }, () => worker()));
+
+      if (!uploadedEntries.length) {
+        throw new Error('所有音檔均上傳失敗，請檢查網路或 GitHub Token 權限');
+      }
+
+      // 單一原子 Commit 寫入全部音檔（同名自動覆蓋）並同步更新 audio_manifest.json（支援自動重試快進）
+      let finalManifest = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        setProgressUi(90, attempt === 0 ? '正在合併 audio_manifest.json 並建立單一 Commit...' : '偵測到遠端更新，自動重新合併提交...');
+        const latestRef = await ghFetchJson(`${repoApi}/git/ref/heads/${encodeURIComponent(branch)}`, { headers });
+        const headCommitSha = latestRef.object.sha;
+        const headCommit = await ghFetchJson(`${repoApi}/git/commits/${headCommitSha}`, { headers });
+        const baseTreeSha = headCommit.tree.sha;
+
+        const remoteManifest = await fetchRemoteManifestList(repoApi, branch, headers);
+        const uploadedPaths = uploadedEntries.map(x => x.relPath);
+        finalManifest = Array.from(new Set([...remoteManifest, ...uploadedPaths])).sort();
+
+        const manBlob = await ghFetchJson(`${repoApi}/git/blobs`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ content: utf8ToBase64(JSON.stringify(finalManifest, null, 2)), encoding: 'base64' })
+        });
+
+        // 以路徑去重，確保同批內同名檔只保留最後一個
+        const treeMap = new Map();
+        for (const ent of uploadedEntries) {
+          treeMap.set(ent.relPath, { path: ent.relPath, mode: '100644', type: 'blob', sha: ent.blobSha });
+        }
+        treeMap.set('audio_manifest.json', { path: 'audio_manifest.json', mode: '100644', type: 'blob', sha: manBlob.sha });
+
+        const newTree = await ghFetchJson(`${repoApi}/git/trees`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ base_tree: baseTreeSha, tree: Array.from(treeMap.values()) })
+        });
+
+        const newCommit = await ghFetchJson(`${repoApi}/git/commits`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            message: `Batch upload ${uploadedEntries.length} audio file(s) to audio/${cat}/ (overwrite enabled)`,
+            tree: newTree.sha,
+            parents: [headCommitSha]
+          })
+        });
+
+        try {
+          await ghFetchJson(`${repoApi}/git/refs/heads/${encodeURIComponent(branch)}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ sha: newCommit.sha, force: false })
+          });
+          break;
+        } catch (patchErr) {
+          if (patchErr.status === 422 && attempt === 0) continue;
+          throw patchErr;
+        }
+      }
+
+      // 立即更新本機預覽快取與音檔清單
+      for (const ent of uploadedEntries) {
+        localBlobUrls.set(ent.relPath, URL.createObjectURL(ent.outBlob));
+      }
+      if (Array.isArray(finalManifest)) audioManifest = finalManifest;
+
+      setProgressUi(100, `批次上傳完成！成功 ${uploadedEntries.length} 個${failedFiles.length ? `，失敗 ${failedFiles.length} 個` : ''}`);
+      updateCounters();
+      renderMainList();
+
+      if (failedFiles.length === 0) {
+        pendingUploadFiles = [];
+        uploadStatusMap.clear();
+        showToast(`已一次過上傳 ${uploadedEntries.length} 個音檔並更新清單！`);
+        setTimeout(() => {
+          document.getElementById('uploadModal')?.classList.add('hidden');
+          renderUploadQueue();
+        }, 600);
+      } else {
+        pendingUploadFiles = failedFiles;
+        showToast(`已成功上傳 ${uploadedEntries.length} 個，剩餘 ${failedFiles.length} 個失敗可再按重試`);
+      }
+    } catch (err) {
+      showToast(`上傳失敗：${err?.message || '未知錯誤'}`);
+      setProgressUi(-1, `上傳失敗：${err?.message || '請檢查網路或 Token'}`);
+    } finally {
+      batchUploading = false;
+      if (catSel) catSel.disabled = false;
+      if (mp3Chk) mp3Chk.disabled = false;
+      renderUploadQueue();
+    }
+  }
+
+  function bindEnhancedUploadUi() {
+    // 先 clone 替換舊節點以徹底清除任何重複監聽器
+    const oldZone = document.getElementById('uploadDropZone');
+    if (oldZone) {
+      const freshZone = oldZone.cloneNode(true);
+      oldZone.replaceWith(freshZone);
+    }
+    const oldStart = document.getElementById('btnStartUpload');
+    if (oldStart) {
+      const freshStart = oldStart.cloneNode(true);
+      oldStart.replaceWith(freshStart);
+    }
+
+    const dropZone = document.getElementById('uploadDropZone');
+    const fileInp = document.getElementById('uploadFileInput');
+    const folderInp = document.getElementById('uploadFolderInput');
+    const btnClear = document.getElementById('btnClearUploadQueue');
+    const btnStart = document.getElementById('btnStartUpload');
+    const catSel = document.getElementById('uploadCategorySel');
+    const mp3Chk = document.getElementById('uploadConvertMp3Chk');
+
+    if (fileInp) {
+      fileInp.onchange = () => {
+        if (fileInp.files && fileInp.files.length) addFilesToQueue(fileInp.files);
+        fileInp.value = '';
+      };
+    }
+    if (folderInp) {
+      folderInp.onchange = () => {
+        if (folderInp.files && folderInp.files.length) addFilesToQueue(folderInp.files);
+        folderInp.value = '';
+      };
+    }
+    if (dropZone) {
+      dropZone.ondragover = (e) => {
+        e.preventDefault();
+        dropZone.classList.add('border-[#0052CC]', 'bg-blue-50/70');
+      };
+      dropZone.ondragleave = () => {
+        dropZone.classList.remove('border-[#0052CC]', 'bg-blue-50/70');
+      };
+      dropZone.ondrop = async (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-[#0052CC]', 'bg-blue-50/70');
+        const dropped = await collectDroppedFiles(e.dataTransfer);
+        addFilesToQueue(dropped);
+      };
+    }
+    if (btnClear) {
+      btnClear.onclick = () => {
+        if (batchUploading) return;
+        pendingUploadFiles = [];
+        uploadStatusMap.clear();
+        renderUploadQueue();
+      };
+    }
+    if (btnStart) {
+      btnStart.onclick = () => runBatchAudioUpload();
+    }
+    if (catSel) catSel.onchange = () => renderUploadQueue();
+    if (mp3Chk) mp3Chk.onchange = () => renderUploadQueue();
+  }
+
+  // 在 initEvents 執行完成後接管上傳介面事件
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(bindEnhancedUploadUi, 0), { once: true });
+  } else {
+    setTimeout(bindEnhancedUploadUi, 0);
+  }
+})();
+// === BATCH MULTI-FILE UPLOAD END ===
 </script>
 </body>
 </html>
