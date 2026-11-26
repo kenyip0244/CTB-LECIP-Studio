@@ -4356,7 +4356,7 @@ function renderTripInspector() {
       }
       draftStops = recalcStopSections(res.stops);
       stopsModified = true;
-      showToast(`已從城巴 API 匯入 ${res.route} 共 ${draftStops.length} 個車站（記得按儲存）`);
+      showToast(`已從城巴 API 匯入 ${res.route} 共 ${draftStops.length} 個車站${res.fullFare != null ? `（已自動填入收費・全程 $${Number(res.fullFare).toFixed(1)}）` : '（暫無收費資料）'}，記得按儲存`);
       renderStopsRows();
     };
   }
@@ -5820,6 +5820,163 @@ boot();
   window.renderMainList._hasLocCodeBanner = true;
 })();
 // === WELCOME BATCH BANNER HOOK END ===
+
+// === CTB API FARE ENRICHER START ===
+(function initCtbApiFareEnricher() {
+  if (typeof fetchOfficialCtbApiRouteStops !== 'function' || fetchOfficialCtbApiRouteStops._withFares) return;
+
+  let hkBusDbPromise = null;
+  async function loadHkBusRouteFareDb() {
+    if (!hkBusDbPromise) {
+      hkBusDbPromise = (async () => {
+        const urls = [
+          'https://hkbus.github.io/hk-bus-crawling/routeFareList.min.json',
+          'https://cdn.jsdelivr.net/gh/hkbus/hk-bus-crawling@gh-pages/routeFareList.min.json'
+        ];
+        for (const u of urls) {
+          try {
+            const r = await fetch(u);
+            if (!r.ok) continue;
+            const j = await r.json();
+            if (j && j.routeList) return j;
+          } catch (_) {}
+        }
+        return null;
+      })();
+    }
+    return hkBusDbPromise;
+  }
+
+  function normSid(id) {
+    const s = String(id || '').trim();
+    return s.replace(/^0+/, '') || s;
+  }
+
+  function parseFareVal(v) {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.round(n * 10) / 10;
+  }
+
+  async function enrichStopsWithFares(routeNo, direction, stops) {
+    if (!Array.isArray(stops) || !stops.length) return { filled: 0, fullFare: null, source: '' };
+    const cleanRoute = String(routeNo || '').trim().toUpperCase();
+    const wantBound = direction === 'inbound' ? 'I' : 'O';
+    const targetIds = stops.map(s => normSid(s.stopId));
+    const targetSet = new Set(targetIds);
+
+    // 1. 優先向 hk-bus-crawling 讀取最新城巴逐站收費
+    const db = await loadHkBusRouteFareDb();
+    if (db && db.routeList) {
+      let bestCand = null;
+      let bestScore = -1;
+
+      for (const rec of Object.values(db.routeList)) {
+        if (!rec || String(rec.route || '').trim().toUpperCase() !== cleanRoute) continue;
+        const cos = Array.isArray(rec.co) ? rec.co.map(x => String(x).toLowerCase()) : [];
+        const coKey = cos.includes('ctb') ? 'ctb' : (cos.includes('nwfb') ? 'nwfb' : '');
+        if (!coKey) continue;
+
+        const bnd = String(rec.bound?.[coKey] || '').trim().toUpperCase();
+        if (bnd && bnd !== wantBound) continue;
+
+        const rStops = Array.isArray(rec.stops?.[coKey]) ? rec.stops[coKey] : [];
+        const rFares = Array.isArray(rec.fares) ? rec.fares : [];
+        if (!rFares.length) continue;
+
+        let overlap = 0;
+        for (const sid of rStops) {
+          if (targetSet.has(normSid(sid))) overlap++;
+        }
+        const lenBonus = rStops.length === stops.length ? 5 : 0;
+        const stBonus = String(rec.serviceType || '1') === '1' ? 1 : 0;
+        const score = overlap * 10 + lenBonus + stBonus;
+        if (score > bestScore) {
+          bestScore = score;
+          bestCand = { rStops, rFares };
+        }
+      }
+
+      if (bestCand && bestScore > 0) {
+        const fareBySid = new Map();
+        bestCand.rStops.forEach((sid, idx) => {
+          const fv = parseFareVal(bestCand.rFares[idx]);
+          if (fv != null) fareBySid.set(normSid(sid), fv);
+        });
+
+        let filled = 0;
+        let lastFare = parseFareVal(bestCand.rFares[0]);
+        stops.forEach((st, idx) => {
+          let fv = fareBySid.get(normSid(st.stopId));
+          if (fv == null && bestCand.rStops.length === stops.length) {
+            fv = parseFareVal(bestCand.rFares[idx]);
+          }
+          if (fv == null && lastFare != null) fv = lastFare;
+          if (fv != null) {
+            st.sectionFare = fv;
+            lastFare = fv;
+            filled++;
+          }
+        });
+
+        if (filled > 0) {
+          return { filled, fullFare: stops[0]?.sectionFare ?? lastFare, source: 'hk-bus-crawling' };
+        }
+      }
+    }
+
+    // 2. 後備：從本地現有同路線班次補回分段收費
+    if (typeof getAllTripEntries === 'function') {
+      const localTrips = getAllTripEntries().filter(
+        t => t.routeId === cleanRoute && t.bound === wantBound && Array.isArray(t.stops) && t.stops.some(s => s.sectionFare != null)
+      );
+      if (localTrips.length) {
+        const fareBySid = new Map();
+        let fallbackFull = null;
+        for (const lt of localTrips) {
+          if (fallbackFull == null && lt.fullFare != null) fallbackFull = parseFareVal(lt.fullFare);
+          for (const ls of lt.stops) {
+            const fv = parseFareVal(ls.sectionFare);
+            if (fv != null && !fareBySid.has(normSid(ls.stopId))) fareBySid.set(normSid(ls.stopId), fv);
+          }
+        }
+        let filled = 0;
+        let lastFare = fallbackFull;
+        stops.forEach(st => {
+          let fv = fareBySid.get(normSid(st.stopId));
+          if (fv == null && lastFare != null) fv = lastFare;
+          if (fv != null) {
+            st.sectionFare = fv;
+            lastFare = fv;
+            filled++;
+          }
+        });
+        if (filled > 0) {
+          return { filled, fullFare: stops[0]?.sectionFare ?? fallbackFull, source: 'local' };
+        }
+      }
+    }
+
+    return { filled: 0, fullFare: null, source: '' };
+  }
+
+  const origFetch = fetchOfficialCtbApiRouteStops;
+  window.fetchOfficialCtbApiRouteStops = async function wrappedFetchOfficialCtbApiRouteStops(routeNo, direction) {
+    const res = await origFetch.call(this, routeNo, direction);
+    if (res && res.ok && Array.isArray(res.stops) && res.stops.length) {
+      try {
+        const fareInfo = await enrichStopsWithFares(res.route || routeNo, direction, res.stops);
+        res.fullFare = fareInfo.fullFare;
+        res.fareFilledCount = fareInfo.filled;
+        res.fareSource = fareInfo.source;
+      } catch (_) {}
+    }
+    return res;
+  };
+  window.fetchOfficialCtbApiRouteStops._withFares = true;
+})();
+// === CTB API FARE ENRICHER END ===
 </script>
 </body>
 </html>
