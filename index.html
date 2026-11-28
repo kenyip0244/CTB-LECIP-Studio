@@ -6160,6 +6160,65 @@ boot();
   setTimeout(() => { bindExportButton(); scanUnconfirmedAutoGen(); }, 600);
 })();
 // === CTB TTS BRIDGE AUTO-CONFIRM & EXPORT HOOK END ===
+
+// === REAL RECORDING PRIORITY OVER TTS START ===
+(function enforceRealAudioPriority() {
+  function isTtsAsset(audioPath, rec) {
+    const fn = String(audioPath || "").split("/").pop();
+    return Boolean(
+      rec?.isAutoGen ||
+      rec?.source === "pc_tts_generator" ||
+      /^AUTOGEN_/i.test(fn)
+    );
+  }
+
+  // 1. Studio 站點配對排序：真人永遠排喺 TTS 前面（無視更新時間）
+  if (typeof window.getMatchingRulesForStopOnTrip === "function" && !window.getMatchingRulesForStopOnTrip._realFirst) {
+    const origMatch = window.getMatchingRulesForStopOnTrip;
+    window.getMatchingRulesForStopOnTrip = function (...args) {
+      const list = origMatch.apply(this, args);
+      return list.sort((a, b) => {
+        const aTts = isTtsAsset(a.audioPath, a.rule) ? 1 : 0;
+        const bTts = isTtsAsset(b.audioPath, b.rule) ? 1 : 0;
+        return aTts - bTts;
+      });
+    };
+    window.getMatchingRulesForStopOnTrip._realFirst = true;
+  }
+
+  // 2. 發佈 audio_mapping.json：rules / welcomeRules / confirmed 全部強制真人優先
+  if (typeof window.buildExportPayload === "function" && !window.buildExportPayload._realFirst) {
+    const origExport = window.buildExportPayload;
+    window.buildExportPayload = function (...args) {
+      const payload = origExport.apply(this, args);
+      if (!payload) return payload;
+
+      if (Array.isArray(payload.rules)) {
+        payload.rules.sort((a, b) => (isTtsAsset(a.audioPath, a) ? 1 : 0) - (isTtsAsset(b.audioPath, b) ? 1 : 0));
+        const newConfirmed = {};
+        for (const r of payload.rules) {
+          for (const rawId of (r.stopIds || [])) {
+            const sid = String(rawId).trim();
+            const numId = sid.replace(/^0+/, "");
+            if (!newConfirmed[sid]) newConfirmed[sid] = r.audioPath;
+            if (numId && !newConfirmed[numId]) newConfirmed[numId] = r.audioPath;
+          }
+        }
+        payload.confirmed = newConfirmed;
+      }
+
+      if (Array.isArray(payload.welcomeRules)) {
+        payload.welcomeRules.sort((a, b) => (isTtsAsset(a.audioPath, a) ? 1 : 0) - (isTtsAsset(b.audioPath, b) ? 1 : 0));
+        const realDef = payload.welcomeRules.find(w => w.scope === "default" && !isTtsAsset(w.audioPath, w));
+        if (realDef) payload.defaultWelcome = realDef.audioPath;
+      }
+
+      return payload;
+    };
+    window.buildExportPayload._realFirst = true;
+  }
+})();
+// === REAL RECORDING PRIORITY OVER TTS END ===
 </script>
   <script src="tts-bridge.js"></script>
 </body>
