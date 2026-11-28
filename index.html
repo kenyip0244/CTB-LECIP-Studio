@@ -5986,6 +5986,7 @@ boot();
 // === CTB TTS BRIDGE AUTO-CONFIRM & EXPORT HOOK START ===
 (function initCtbTtsStudioHook() {
   const DEFAULT_REMARK = "🤖 電腦 TTS 生成（小美／Lucy／小燕）";
+  const autoCheckedPaths = new Set();
 
   function getMissingStopsForExport() {
     const cov = typeof buildStopCoverageIndex === "function" ? buildStopCoverageIndex() : new Map();
@@ -6001,8 +6002,7 @@ boot();
     return (allStops || [])
       .filter(st => !((cov.get(st.stopId) || []).length > 0))
       .map(st => {
-        const matchedTrips = tripByStop.get(st.stopId) || [];
-        const firstTrip = matchedTrips[0] || null;
+        const firstTrip = (tripByStop.get(st.stopId) || [])[0] || null;
         return {
           id: st.stopId,
           numId: st.numId,
@@ -6024,18 +6024,25 @@ boot();
     }
     return getAllTripEntries()
       .filter(t => !boundTrips.has(t.name))
-      .map(t => ({
-        welcomeKey: `${t.routeId}_${t.bound || "O"}_${t.serviceType || "1"}`,
-        route: t.routeId || "",
-        bound: t.bound || "O",
-        serviceType: t.serviceType || "1",
-        orig_tc: t.origTc || "",
-        dest_tc: t.destTc || "",
-        orig_en: "",
-        dest_en: "",
-        via_tc: t.viaText ? [t.viaText] : [],
-        via_en: []
-      }));
+      .map(t => {
+        const firstSt = t.stops?.length ? stopById.get(t.stops[0].stopId) : null;
+        const lastSt = t.stops?.length ? stopById.get(t.stops[t.stops.length - 1].stopId) : null;
+        const origEn = (firstSt?.nameEn || "").split(",")[0].split("/")[0].trim();
+        const destEn = (lastSt?.nameEn || "").split(",")[0].split("/")[0].trim();
+        return {
+          welcomeKey: `${t.routeId}_${t.bound || "O"}_${t.serviceType || "1"}`,
+          tripName: t.name || "",
+          route: t.routeId || "",
+          bound: t.bound || "O",
+          serviceType: t.serviceType || "1",
+          orig_tc: t.origTc || firstSt?.nameTc || "",
+          dest_tc: t.destTc || lastSt?.nameTc || "",
+          orig_en: origEn,
+          dest_en: destEn,
+          via_tc: t.viaText ? [t.viaText] : [],
+          via_en: []
+        };
+      });
   }
 
   function bindExportButton() {
@@ -6067,19 +6074,14 @@ boot();
       const fn = String(relPath || "").split("/").pop();
       const parsed = window.CTB_TTS_BRIDGE?.parseAutoGenFile
         ? window.CTB_TTS_BRIDGE.parseAutoGenFile(fn)
-        : (() => {
-            const sm = fn.match(/^AUTOGEN_STOP_(\d+)(?:_.*)?\.(mp3|wav|ogg|m4a)$/i);
-            if (sm) return { kind: "stop", stopId: sm[1], isAutoGen: true };
-            const wm = fn.match(/^AUTOGEN_WELCOME_([A-Za-z0-9_-]+)\.(mp3|wav|ogg|m4a)$/i);
-            if (wm) return { kind: "welcome", welcomeKey: wm[1], isAutoGen: true };
-            return null;
-          })();
-
+        : null;
       if (!parsed) continue;
       const remark = parsed.remark || window.CTB_TTS_BRIDGE?.AUTO_GEN_REMARK || DEFAULT_REMARK;
 
       if (parsed.kind === "stop") {
-        const sid = String(parsed.stopId);
+        const rawSid = String(parsed.stopId);
+        const matchedStop = stopById.get(rawSid) || stopById.get(rawSid.padStart(6, "0")) || (allStops || []).find(x => x.numId === rawSid);
+        const sid = matchedStop ? matchedStop.stopId : rawSid;
         const rule = ensureRule(relPath);
         if (!rule.stopIds.includes(sid)) rule.stopIds.push(sid);
         rule.isAutoGen = true;
@@ -6098,7 +6100,7 @@ boot();
         if (w.scope !== "default") w.scope = "trips";
         if (typeof getAllTripEntries === "function") {
           const hitTrip = getAllTripEntries().find(t =>
-            `${t.routeId}_${t.bound || "O"}_${t.serviceType || "1"}`.toUpperCase() === String(parsed.welcomeKey).toUpperCase()
+            `${t.routeId}_${t.bound || "O"}_${t.serviceType || "1"}`.replace(/[^A-Za-z0-9_-]/g, "").toUpperCase() === String(parsed.welcomeKey).toUpperCase()
           );
           if (hitTrip && !w.tripNames.includes(hitTrip.name)) {
             w.tripNames.push(hitTrip.name);
@@ -6125,34 +6127,37 @@ boot();
     }
   }
 
-  const origPush = Array.prototype.push;
-  let hookingManifest = false;
-  function wrapManifest() {
-    if (hookingManifest || !Array.isArray(audioManifest)) return;
-    hookingManifest = true;
-    audioManifest.push = function (...args) {
-      const res = origPush.apply(this, args);
-      const autogens = args.filter(p => /^AUTOGEN_/i.test(String(p || "").split("/").pop()));
-      if (autogens.length) setTimeout(() => autoConfirmUploadedPaths(autogens), 50);
-      return res;
-    };
+  let scanning = false;
+  function scanUnconfirmedAutoGen() {
+    if (scanning || !Array.isArray(audioManifest) || !audioManifest.length || !allStops?.length) return;
+    const pending = [];
+    for (const relPath of audioManifest) {
+      if (!relPath || autoCheckedPaths.has(relPath) || studioDb.ignored?.[relPath]) continue;
+      const fn = String(relPath).split("/").pop();
+      if (!/^AUTOGEN_(STOP|WELCOME)_/i.test(fn)) continue;
+      autoCheckedPaths.add(relPath);
+      const hasStop = studioDb.rules?.[relPath]?.stopIds?.length > 0;
+      const hasWel = Boolean(studioDb.welcomeRules?.[relPath]);
+      if (!hasStop && !hasWel) pending.push(relPath);
+    }
+    if (pending.length) {
+      scanning = true;
+      try { autoConfirmUploadedPaths(pending); } finally { scanning = false; }
+    }
   }
 
   const origRender = window.renderMainList;
-  if (typeof origRender === "function" && !origRender._ttsHooked) {
+  if (typeof origRender === "function" && !origRender._ttsHookedV2) {
     window.renderMainList = function (...args) {
-      wrapManifest();
       const r = origRender.apply(this, args);
       bindExportButton();
+      setTimeout(scanUnconfirmedAutoGen, 80);
       return r;
     };
-    window.renderMainList._ttsHooked = true;
+    window.renderMainList._ttsHookedV2 = true;
   }
 
-  setTimeout(() => {
-    wrapManifest();
-    bindExportButton();
-  }, 300);
+  setTimeout(() => { bindExportButton(); scanUnconfirmedAutoGen(); }, 600);
 })();
 // === CTB TTS BRIDGE AUTO-CONFIRM & EXPORT HOOK END ===
 </script>

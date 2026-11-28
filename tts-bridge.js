@@ -1,4 +1,4 @@
-﻿// tts-bridge.js — CTB-LECIP-Studio 電腦 TTS 自動化與備註橋接模組
+// tts-bridge.js — CTB-LECIP-Studio 電腦 TTS 自動化與備註橋接模組
 
 (function () {
   const AUTO_GEN_REMARK = "🤖 電腦 TTS 生成（小美／Lucy／小燕）";
@@ -6,8 +6,7 @@
   // 1. 小美（InterPhonic 6.0 粵語）語句前處理：口語轉書面語 + 地名多音字修正
   function toXiaomeiWritten(text = "") {
     const rules = [
-      [/黃泥涌/g, "黃泥沖"],
-      [/([東西南北大葵沙])涌/g, "$1沖"],
+      [/涌/g, "沖"], [/巿/g, "市"],
       [/我哋/g, "我們"],
       [/你哋/g, "你們"],
       [/佢哋/g, "他們"],
@@ -37,7 +36,12 @@
   }
 
   function cleanStopEn(nameEn = "") {
-    return String(nameEn).split(",")[0].trim();
+    let s = String(nameEn).split(",")[0].split("/")[0].trim();
+    s = s.replace(/\bLR\b/g, "Light Rail").replace(/\bKLN\b/gi, "Kowloon").replace(/\bHK\b/g, "Hong Kong");
+    if (s.length > 4 && s === s.toUpperCase()) {
+      s = s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+    }
+    return s;
   }
 
   function safeStem(str = "") {
