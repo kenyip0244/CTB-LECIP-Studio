@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-HK">
 <head>
   <meta charset="UTF-8" />
@@ -258,6 +258,9 @@
             </label>
           </div>
           <select id="missingTripSelect" class="w-full min-h-[40px] px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-bold text-slate-900"></select>
+          <button id="btnExportMissingTtsJson" type="button" class="w-full min-h-[36px] px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 text-xs font-black">
+  匯出缺失車站（含中英文）＋ 歡迎詞 JSON
+</button>
         </div>
 
         <div id="tripCreateBar" class="hidden flex items-center gap-1.5">
@@ -1743,6 +1746,7 @@ function renderMainList() {
           <div class="min-w-0 flex-1 space-y-1">
             <div class="flex items-center gap-2 min-w-0">
               <span class="text-[13px] font-black text-slate-900 truncate">${esc(fn)}</span>
+              ${(window.CTB_TTS_BRIDGE?.renderAutoGenBadge({ fileName: fn, isAutoGen: r?.isAutoGen, source: r?.source, remark: r?.remark || r?.note }) || ((r?.source === "pc_tts_generator" || /^AUTOGEN_/i.test(fn)) ? `<span class="px-1.5 py-0.5 rounded bg-blue-100 text-[#0052CC] text-[10px] font-black shrink-0">TTS 生成</span>` : ""))}
               ${peer ? `<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-black shrink-0">${esc(peer.name)} 編輯中</span>` : ''}
             </div>
             ${activeNav === 'processed' ? `<div class="flex flex-wrap items-center gap-1.5">${stopBadges}${moreStops}${routeTag}${tripTag}${byTag}</div>` : ''}
@@ -1884,6 +1888,7 @@ function renderMainList() {
             <div class="flex items-center gap-1.5 min-w-0">
               ${badge}
               <span class="text-[13px] font-black text-slate-900 truncate">${esc(fn)}</span>
+              ${(window.CTB_TTS_BRIDGE?.renderAutoGenBadge({ fileName: fn, isAutoGen: r?.isAutoGen, source: r?.source, remark: r?.remark || r?.note }) || ((r?.source === "pc_tts_generator" || /^AUTOGEN_/i.test(fn)) ? `<span class="px-1.5 py-0.5 rounded bg-blue-100 text-[#0052CC] text-[10px] font-black shrink-0">TTS 生成</span>` : ""))}
             </div>
             <div class="text-[11px] font-semibold text-slate-500 truncate">${esc(summary)}${s.note ? `・${esc(s.note)}` : ''}</div>
           </div>
@@ -5977,6 +5982,179 @@ boot();
   window.fetchOfficialCtbApiRouteStops._withFares = true;
 })();
 // === CTB API FARE ENRICHER END ===
+
+// === CTB TTS BRIDGE AUTO-CONFIRM & EXPORT HOOK START ===
+(function initCtbTtsStudioHook() {
+  const DEFAULT_REMARK = "🤖 電腦 TTS 生成（小美／Lucy／小燕）";
+
+  function getMissingStopsForExport() {
+    const cov = typeof buildStopCoverageIndex === "function" ? buildStopCoverageIndex() : new Map();
+    const tripByStop = new Map();
+    if (typeof getAllTripEntries === "function") {
+      for (const t of getAllTripEntries()) {
+        for (const s of (t.stops || [])) {
+          if (!tripByStop.has(s.stopId)) tripByStop.set(s.stopId, []);
+          tripByStop.get(s.stopId).push(t);
+        }
+      }
+    }
+    return (allStops || [])
+      .filter(st => !((cov.get(st.stopId) || []).length > 0))
+      .map(st => {
+        const matchedTrips = tripByStop.get(st.stopId) || [];
+        const firstTrip = matchedTrips[0] || null;
+        return {
+          id: st.stopId,
+          numId: st.numId,
+          name_tc: st.nameTc || "",
+          name_en: st.nameEn || "",
+          routes: st.routes || [],
+          orig_tc: firstTrip?.origTc || "",
+          dest_tc: firstTrip?.destTc || ""
+        };
+      });
+  }
+
+  function getMissingWelcomesForExport() {
+    if (typeof getAllTripEntries !== "function") return [];
+    const boundTrips = new Set();
+    for (const [p, w] of Object.entries(studioDb.welcomeRules || {})) {
+      if (!w || studioDb.ignored?.[p] || w.scope === "default") continue;
+      for (const tn of (w.tripNames || [])) boundTrips.add(String(tn).trim());
+    }
+    return getAllTripEntries()
+      .filter(t => !boundTrips.has(t.name))
+      .map(t => ({
+        welcomeKey: `${t.routeId}_${t.bound || "O"}_${t.serviceType || "1"}`,
+        route: t.routeId || "",
+        bound: t.bound || "O",
+        serviceType: t.serviceType || "1",
+        orig_tc: t.origTc || "",
+        dest_tc: t.destTc || "",
+        orig_en: "",
+        dest_en: "",
+        via_tc: t.viaText ? [t.viaText] : [],
+        via_en: []
+      }));
+  }
+
+  function bindExportButton() {
+    const btn = document.getElementById("btnExportMissingTtsJson");
+    if (!btn || btn._ttsBound) return;
+    btn._ttsBound = true;
+    btn.onclick = () => {
+      if (!window.CTB_TTS_BRIDGE?.exportMissingTTSJob) {
+        showToast("尚未載入 tts-bridge.js");
+        return;
+      }
+      const q = (document.getElementById("mainSearchInput")?.value || "").trim();
+      const routeFilter = /^[A-Z]{0,2}\d{1,3}[A-Z]?$/i.test(q) ? q.toUpperCase() : "";
+      const counts = window.CTB_TTS_BRIDGE.exportMissingTTSJob({
+        missingStops: getMissingStopsForExport(),
+        missingWelcomes: getMissingWelcomesForExport(),
+        routeFilter
+      });
+      showToast(`已匯出 ${counts.stops} 缺失站＋${counts.welcomes} 歡迎詞 JSON`);
+    };
+  }
+
+  function autoConfirmUploadedPaths(paths = []) {
+    const nowIso = new Date().toISOString();
+    const me = typeof getMyName === "function" ? getMyName() : "Studio";
+    let confirmedCount = 0;
+
+    for (const relPath of paths) {
+      const fn = String(relPath || "").split("/").pop();
+      const parsed = window.CTB_TTS_BRIDGE?.parseAutoGenFile
+        ? window.CTB_TTS_BRIDGE.parseAutoGenFile(fn)
+        : (() => {
+            const sm = fn.match(/^AUTOGEN_STOP_(\d+)(?:_.*)?\.(mp3|wav|ogg|m4a)$/i);
+            if (sm) return { kind: "stop", stopId: sm[1], isAutoGen: true };
+            const wm = fn.match(/^AUTOGEN_WELCOME_([A-Za-z0-9_-]+)\.(mp3|wav|ogg|m4a)$/i);
+            if (wm) return { kind: "welcome", welcomeKey: wm[1], isAutoGen: true };
+            return null;
+          })();
+
+      if (!parsed) continue;
+      const remark = parsed.remark || window.CTB_TTS_BRIDGE?.AUTO_GEN_REMARK || DEFAULT_REMARK;
+
+      if (parsed.kind === "stop") {
+        const sid = String(parsed.stopId);
+        const rule = ensureRule(relPath);
+        if (!rule.stopIds.includes(sid)) rule.stopIds.push(sid);
+        rule.isAutoGen = true;
+        rule.confirmed = true;
+        rule.source = "pc_tts_generator";
+        rule.remark = remark;
+        if (!rule.note || !rule.note.includes("TTS")) {
+          rule.note = rule.note ? `${rule.note}（${remark}）` : remark;
+        }
+        rule.updatedAt = nowIso;
+        rule.updatedBy = me;
+        syncAtomicRecord("rules", relPath, rule);
+        confirmedCount++;
+      } else if (parsed.kind === "welcome") {
+        const w = ensureWelcomeRule(relPath);
+        if (w.scope !== "default") w.scope = "trips";
+        if (typeof getAllTripEntries === "function") {
+          const hitTrip = getAllTripEntries().find(t =>
+            `${t.routeId}_${t.bound || "O"}_${t.serviceType || "1"}`.toUpperCase() === String(parsed.welcomeKey).toUpperCase()
+          );
+          if (hitTrip && !w.tripNames.includes(hitTrip.name)) {
+            w.tripNames.push(hitTrip.name);
+          }
+        }
+        w.isAutoGen = true;
+        w.confirmed = true;
+        w.source = "pc_tts_generator";
+        w.remark = remark;
+        if (!w.note || !w.note.includes("TTS")) {
+          w.note = w.note ? `${w.note}（${remark}）` : remark;
+        }
+        w.updatedAt = nowIso;
+        w.updatedBy = me;
+        syncAtomicRecord("welcomeRules", relPath, w);
+        confirmedCount++;
+      }
+    }
+
+    if (confirmedCount > 0) {
+      updateCounters();
+      renderMainList();
+      showToast(`已自動識別並確認 ${confirmedCount} 個電腦 TTS 音檔（已附帶備註）`);
+    }
+  }
+
+  const origPush = Array.prototype.push;
+  let hookingManifest = false;
+  function wrapManifest() {
+    if (hookingManifest || !Array.isArray(audioManifest)) return;
+    hookingManifest = true;
+    audioManifest.push = function (...args) {
+      const res = origPush.apply(this, args);
+      const autogens = args.filter(p => /^AUTOGEN_/i.test(String(p || "").split("/").pop()));
+      if (autogens.length) setTimeout(() => autoConfirmUploadedPaths(autogens), 50);
+      return res;
+    };
+  }
+
+  const origRender = window.renderMainList;
+  if (typeof origRender === "function" && !origRender._ttsHooked) {
+    window.renderMainList = function (...args) {
+      wrapManifest();
+      const r = origRender.apply(this, args);
+      bindExportButton();
+      return r;
+    };
+    window.renderMainList._ttsHooked = true;
+  }
+
+  setTimeout(() => {
+    wrapManifest();
+    bindExportButton();
+  }, 300);
+})();
+// === CTB TTS BRIDGE AUTO-CONFIRM & EXPORT HOOK END ===
 </script>
   <script src="tts-bridge.js"></script>
 </body>
